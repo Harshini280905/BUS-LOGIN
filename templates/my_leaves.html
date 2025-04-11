@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Leave Requests - Bus Schedule System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/static/bus_interior.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            padding: 20px;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            margin: 40px auto;
+        }
+        .leave-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .leave-card:hover {
+            transform: translateY(-5px);
+        }
+        .status-pending {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .status-approved {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .status-rejected {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .admin-response {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .response-time {
+            font-size: 0.85em;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>My Leave Requests</h2>
+            <a href="{{ url_for('driver_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+        </div>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% if leaves %}
+            {% for leave in leaves %}
+                <div class="leave-card">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h5>Leave Request - {{ leave.date }}</h5>
+                                    <p><strong>Time:</strong> {{ leave.start_time }} - {{ leave.end_time }}</p>
+                                    <p><strong>Reason:</strong> {{ leave.reason }}</p>
+                                    <p><strong>Status:</strong> 
+                                        <span class="status-{{ leave.status }}">
+                                            {{ leave.status.upper() }}
+                                        </span>
+                                    </p>
+                                </div>
+                                <div class="text-muted">
+                                    Submitted: {{ leave.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                </div>
+                            </div>
+                            
+                            {% if leave.admin_response %}
+                                <div class="admin-response">
+                                    <p><strong>Admin Response:</strong></p>
+                                    <p>{{ leave.admin_response }}</p>
+                                    <p class="response-time mb-0">
+                                        Responded on: {{ leave.response_time.strftime('%Y-%m-%d %H:%M') }}
+                                    </p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-info">You haven't submitted any leave requests yet.</div>
+        {% endif %}
+        
+        <div class="text-center mt-4">
+            <a href="{{ url_for('apply_leave') }}" class="btn btn-primary">Apply for New Leave</a>
+        </div>
+    </div>
+</body>
+</html> 
