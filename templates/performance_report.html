@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Performance Reports</h2>
+        <a href="{{ url_for('reports_dashboard') }}" class="btn btn-secondary">Back to Reports</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="POST" class="row g-3">
+                <div class="col-md-4">
+                    <label for="start_date" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="driver_username" class="form-label">Driver (Optional)</label>
+                    <select class="form-select" id="driver_username" name="driver_username">
+                        <option value="">All Drivers</option>
+                        {% for driver in drivers %}
+                            <option value="{{ driver.username }}">{{ driver.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Generate Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if metrics %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Performance Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <h6>Average On-Time Arrival</h6>
+                            <h3 class="text-primary">{{ summary.avg_on_time }}%</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <h6>Break Compliance</h6>
+                            <h3 class="text-primary">{{ summary.avg_break_compliance }}%</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <h6>Average Hours Worked</h6>
+                            <h3 class="text-primary">{{ summary.avg_hours }}h</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <h6>Total Incidents</h6>
+                            <h3 class="text-{% if summary.total_incidents > 0 %}warning{% else %}success{% endif %}">
+                                {{ summary.total_incidents }}
+                            </h3>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded p-3 text-center">
+                            <h6>Average Passenger Rating</h6>
+                            <h3 class="text-primary">{{ summary.avg_rating }}/5</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Detailed Metrics</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Driver</th>
+                                <th>On-Time %</th>
+                                <th>Break Compliance %</th>
+                                <th>Hours Worked</th>
+                                <th>Incidents</th>
+                                <th>Rating</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for metric in metrics %}
+                                <tr>
+                                    <td>{{ metric.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ metric.driver_username }}</td>
+                                    <td>{{ "%.1f"|format(metric.on_time_arrival_percentage) }}%</td>
+                                    <td>{{ "%.1f"|format(metric.break_compliance_percentage) }}%</td>
+                                    <td>{{ "%.1f"|format(metric.total_hours_worked) }}h</td>
+                                    <td>{{ metric.incidents_reported }}</td>
+                                    <td>{{ "%.1f"|format(metric.passenger_feedback_rating) }}/5</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <a href="{{ url_for('export_report', report_type='performance', start_date=start_date, end_date=end_date) }}" 
+               class="btn btn-success">
+                Export to CSV
+            </a>
+        </div>
+    {% endif %}
+</div>
+
+{% block scripts %}
+<script>
+    // Set max date to today
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('start_date').max = today;
+        document.getElementById('end_date').max = today;
+    });
+</script>
+{% endblock %}
+
+{% endblock %} 

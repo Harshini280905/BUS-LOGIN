@@ -1,106 +1,163 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Driver Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            min-height: 100vh;
-            background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/static/bus_interior.jpg');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-        }
-        .container {
-            background-color: rgba(255, 255, 255, 0.9);
-            border-radius: 15px;
-            padding: 30px;
-            margin-top: 40px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.2);
-        }
-        .btn {
-            margin: 5px;
-            padding: 10px 20px;
-        }
-        .btn-primary {
-            background-color: #007bff;
-            border-color: #007bff;
-        }
-        .btn-primary:hover {
-            background-color: #0056b3;
-            border-color: #0056b3;
-        }
-        .settings-dropdown {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-        }
-        h2, p {
-            color: #333;
-        }
-        .notification-badge {
-            position: relative;
-            top: -10px;
-            right: -5px;
-            padding: 3px 7px;
-            border-radius: 50%;
-            background: red;
-            color: white;
-        }
-    </style>
-</head>
-<body>
-    <div class="container text-center">
-        <div class="settings-dropdown">
-            <div class="dropdown">
-                <button class="btn btn-secondary dropdown-toggle" type="button" id="settingsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    Settings
-                </button>
-                <ul class="dropdown-menu" aria-labelledby="settingsDropdown">
-                    <li><a class="dropdown-item" href="{{ url_for('profile') }}">View Profile</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('change_password') }}">Change Password</a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a></li>
-                </ul>
+{% extends "base.html" %}
+
+{% block title %}Driver Dashboard - Navis{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2 class="mb-0">Welcome, Driver!</h2>
+        <p class="text-muted">View your schedule and track your records.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- My Schedule Card -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 dashboard-card">
+            <div class="card-body text-center">
+                <i class="fas fa-calendar-alt fa-3x mb-3 text-primary"></i>
+                <h5 class="card-title">My Schedule</h5>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('view_schedules') }}" class="btn btn-warning">View Schedule</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assigned Routes Card -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 dashboard-card">
+            <div class="card-body text-center">
+                <i class="fas fa-route fa-3x mb-3 text-primary"></i>
+                <h5 class="card-title">Assigned Routes</h5>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('view_schedules') }}" class="btn btn-warning">View Assignments</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leave & Attendance Card -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 dashboard-card">
+            <div class="card-body text-center">
+                <i class="fas fa-clipboard-list fa-3x mb-3 text-primary"></i>
+                <h5 class="card-title">Leave & Attendance</h5>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('my_leaves') }}" class="btn btn-warning">Check Records</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Settings Card -->
+    <div class="col-md-6 col-lg-3">
+        <div class="card h-100 dashboard-card">
+            <div class="card-body text-center">
+                <i class="fas fa-user-cog fa-3x mb-3 text-primary"></i>
+                <h5 class="card-title">Profile Settings</h5>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('profile') }}" class="btn btn-warning">Settings</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Today's Schedule Section -->
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Today's Schedule</h5>
+                <a href="{{ url_for('view_schedules') }}" class="btn btn-sm btn-warning">View All</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Route</th>
+                                <th>Bus No.</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for schedule in todays_schedules %}
+                            <tr>
+                                <td>{{ schedule.start_time }} - {{ schedule.end_time }}</td>
+                                <td>{{ schedule.route }}</td>
+                                <td>{{ schedule.bus_number }}</td>
+                                <td><span class="badge status-{{ schedule.status }}">{{ schedule.status|title }}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">View Details</button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">No schedules for today</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('apply_leave') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-calendar-plus me-2"></i>Apply for Leave
+                    </a>
+                    <a href="{{ url_for('request_shift_swap') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-exchange-alt me-2"></i>Request Shift Swap
+                    </a>
+                    <a href="{{ url_for('upload_license') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-id-card me-2"></i>Upload License
+                    </a>
+                    <a href="{{ url_for('manage_breaks') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-coffee me-2"></i>Manage Breaks
+                    </a>
+                </div>
             </div>
         </div>
         
-        <h2>Driver Dashboard</h2>
-        <p>Welcome, {{ session['username'] }}!</p>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
+        <!-- Leave Status Card -->
+        <div class="card mt-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Leave Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for leave in recent_leaves %}
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ leave.date }}</h6>
+                            <span class="badge status-{{ leave.status }}">{{ leave.status|title }}</span>
+                        </div>
+                        <small class="text-muted">{{ leave.reason }}</small>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">No recent leave requests</p>
                 {% endfor %}
-            {% endif %}
-        {% endwith %}
-        
-        <div class="mt-4">
-            <a href="{{ url_for('view_schedules') }}" class="btn btn-info">View My Schedules</a>
-            <a href="{{ url_for('apply_leave') }}" class="btn btn-primary">Apply for Leave</a>
-            <a href="{{ url_for('my_leaves') }}" class="btn btn-warning">
-                View Leave Requests
-                {% if pending_leaves > 0 %}
-                    <span class="notification-badge">{{ pending_leaves }}</span>
-                {% endif %}
-            </a>
-            <a href="{{ url_for('upload_license') }}" class="btn btn-success">
-                {% set license = get_driver_license(session['username']) %}
-                {% if license %}
-                    Update License
-                    <span class="badge bg-{{ 'warning' if license.status == 'pending' else 'success' if license.status == 'approved' else 'danger' }}">
-                        {{ license.status }}
-                    </span>
-                {% else %}
-                    Upload License
-                {% endif %}
-            </a>
+                </div>
+            </div>
         </div>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add any dashboard-specific JavaScript here
+});
+</script>
+{% endblock %}

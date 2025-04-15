@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Manage Break Periods</h2>
+        <a href="{{ url_for('driver_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Schedule Break</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="schedule_id" class="form-label">Select Schedule</label>
+                            <select class="form-select" id="schedule_id" name="schedule_id" required>
+                                <option value="">Choose a schedule...</option>
+                                {% for schedule in schedules %}
+                                    <option value="{{ schedule.id }}">
+                                        {{ schedule.route }} ({{ schedule.start_time }} - {{ schedule.end_time }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="break_type" class="form-label">Break Type</label>
+                            <select class="form-select" id="break_type" name="break_type" required>
+                                <option value="rest">Rest Break</option>
+                                <option value="lunch">Lunch Break</option>
+                                <option value="emergency">Emergency Break</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="start_time" class="form-label">Start Time</label>
+                            <input type="datetime-local" class="form-control" id="start_time" name="start_time" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Schedule Break</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Today's Breaks</h5>
+                </div>
+                <div class="card-body">
+                    {% if breaks %}
+                        {% for break in breaks %}
+                            <div class="break-item mb-3 p-3 border rounded">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6>{{ break.break_type|title }} Break</h6>
+                                        <p class="mb-1">
+                                            <strong>Start:</strong> {{ break.start_time.strftime('%H:%M') }}
+                                            {% if break.end_time %}
+                                                <br><strong>End:</strong> {{ break.end_time.strftime('%H:%M') }}
+                                            {% endif %}
+                                        </p>
+                                        <span class="badge {% if break.status == 'scheduled' %}bg-info{% elif break.status == 'ongoing' %}bg-warning{% else %}bg-success{% endif %}">
+                                            {{ break.status|title }}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        {% if break.status == 'scheduled' %}
+                                            <a href="{{ url_for('start_break', break_id=break.id) }}" class="btn btn-sm btn-success">Start Break</a>
+                                        {% elif break.status == 'ongoing' %}
+                                            <a href="{{ url_for('end_break', break_id=break.id) }}" class="btn btn-sm btn-warning">End Break</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">No breaks scheduled for today.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Set min date to today
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('start_time').min = today + 'T00:00';
+    });
+</script>
+{% endblock %}
+
+{% endblock %} 

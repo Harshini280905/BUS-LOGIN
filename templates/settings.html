@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Navis{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">⚙️ Settings</h2>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Account Settings -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-user-cog me-2"></i>Account Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_account_settings') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Email Notifications</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="email_schedule" id="email_schedule" 
+                                   {% if settings.email_schedule %}checked{% endif %}>
+                            <label class="form-check-label" for="email_schedule">
+                                Schedule Updates
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="email_leave" id="email_leave"
+                                   {% if settings.email_leave %}checked{% endif %}>
+                            <label class="form-check-label" for="email_leave">
+                                Leave Status Updates
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="email_attendance" id="email_attendance"
+                                   {% if settings.email_attendance %}checked{% endif %}>
+                            <label class="form-check-label" for="email_attendance">
+                                Attendance Reminders
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Time Zone</label>
+                        <select class="form-select" name="timezone">
+                            <option value="UTC" {% if settings.timezone == 'UTC' %}selected{% endif %}>UTC</option>
+                            <option value="Asia/Kolkata" {% if settings.timezone == 'Asia/Kolkata' %}selected{% endif %}>India (IST)</option>
+                            <!-- Add more timezone options as needed -->
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Account Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Display Settings -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-desktop me-2"></i>Display Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_display_settings') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Theme</label>
+                        <select class="form-select" name="theme">
+                            <option value="light" {% if settings.theme == 'light' %}selected{% endif %}>Light</option>
+                            <option value="dark" {% if settings.theme == 'dark' %}selected{% endif %}>Dark</option>
+                            <option value="auto" {% if settings.theme == 'auto' %}selected{% endif %}>Auto (System)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Date Format</label>
+                        <select class="form-select" name="date_format">
+                            <option value="DD/MM/YYYY" {% if settings.date_format == 'DD/MM/YYYY' %}selected{% endif %}>DD/MM/YYYY</option>
+                            <option value="MM/DD/YYYY" {% if settings.date_format == 'MM/DD/YYYY' %}selected{% endif %}>MM/DD/YYYY</option>
+                            <option value="YYYY-MM-DD" {% if settings.date_format == 'YYYY-MM-DD' %}selected{% endif %}>YYYY-MM-DD</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Time Format</label>
+                        <select class="form-select" name="time_format">
+                            <option value="12" {% if settings.time_format == '12' %}selected{% endif %}>12-hour</option>
+                            <option value="24" {% if settings.time_format == '24' %}selected{% endif %}>24-hour</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Display Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {% if session.role == 'admin' %}
+    <!-- System Settings -->
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-tools me-2"></i>System Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_system_settings') }}">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Maximum Leave Days (Per Year)</label>
+                            <input type="number" class="form-control" name="max_leave_days" 
+                                   value="{{ settings.max_leave_days or 24 }}" min="0">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Late Check-in Threshold (Minutes)</label>
+                            <input type="number" class="form-control" name="late_threshold" 
+                                   value="{{ settings.late_threshold or 15 }}" min="0">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Minimum Break Duration (Minutes)</label>
+                            <input type="number" class="form-control" name="min_break_duration" 
+                                   value="{{ settings.min_break_duration or 30 }}" min="0">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Default Working Hours</label>
+                            <div class="input-group">
+                                <input type="time" class="form-control" name="work_start_time" 
+                                       value="{{ settings.work_start_time or '09:00' }}">
+                                <span class="input-group-text">to</span>
+                                <input type="time" class="form-control" name="work_end_time" 
+                                       value="{{ settings.work_end_time or '17:00' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">System Maintenance Window</label>
+                            <div class="input-group">
+                                <input type="time" class="form-control" name="maintenance_start" 
+                                       value="{{ settings.maintenance_start or '02:00' }}">
+                                <span class="input-group-text">to</span>
+                                <input type="time" class="form-control" name="maintenance_end" 
+                                       value="{{ settings.maintenance_end or '04:00' }}">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save System Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add settings-specific JavaScript here
+    const themeSelect = document.querySelector('select[name="theme"]');
+    if (themeSelect) {
+        themeSelect.addEventListener('change', function() {
+            // Apply theme preview
+            document.body.classList.toggle('dark-mode', this.value === 'dark');
+        });
+    }
+});
+</script>
+{% endblock %} 

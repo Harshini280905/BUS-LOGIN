@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Manage Shift Swap Requests</h2>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% if swap_requests %}
+        {% for request in swap_requests %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5>Shift Swap Request #{{ request.id }}</h5>
+                            <p><strong>Requesting Driver:</strong> {{ request.requesting_driver }}</p>
+                            <p><strong>Target Driver:</strong> {{ request.target_driver }}</p>
+                            <p><strong>Reason:</strong> {{ request.reason }}</p>
+                            <p><strong>Status:</strong> 
+                                <span class="badge {% if request.status == 'pending' %}bg-warning{% elif request.status == 'approved' %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ request.status.upper() }}
+                                </span>
+                            </p>
+                            <p><strong>Created:</strong> {{ request.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            {% if request.status == 'pending' %}
+                                <form method="POST" action="{{ url_for('handle_shift_swap', id=request.id, action='approve') }}" class="mb-2">
+                                    <div class="mb-2">
+                                        <label for="response" class="form-label">Response (Optional)</label>
+                                        <textarea class="form-control" id="response" name="response" rows="2"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-success w-100">Approve</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('handle_shift_swap', id=request.id, action='reject') }}">
+                                    <div class="mb-2">
+                                        <label for="response" class="form-label">Rejection Reason</label>
+                                        <textarea class="form-control" id="response" name="response" rows="2" required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-danger w-100">Reject</button>
+                                </form>
+                            {% else %}
+                                {% if request.admin_response %}
+                                    <div class="alert alert-info">
+                                        <strong>Admin Response:</strong><br>
+                                        {{ request.admin_response }}
+                                    </div>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">No shift swap requests found.</div>
+    {% endif %}
+</div>
+{% endblock %} 
