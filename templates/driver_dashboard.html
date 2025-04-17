@@ -3,150 +3,219 @@
 {% block title %}Driver Dashboard - Navis{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col">
-        <h2 class="mb-0">Welcome, Driver!</h2>
-        <p class="text-muted">View your schedule and track your records.</p>
-    </div>
-</div>
+<style>
+    .dashboard-card {
+        background: linear-gradient(135deg, #1e88e5, #0d47a1);
+        color: white;
+        border: none;
+        transition: transform 0.3s ease;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+    }
+    .card-icon {
+        font-size: 3rem;
+        margin-bottom: 1.5rem;
+    }
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+    }
+    .stat-label {
+        font-size: 1.2rem;
+        opacity: 0.9;
+    }
+    .action-card {
+        background: linear-gradient(135deg, #2196f3, #1976d2);
+        color: white;
+        border: none;
+        font-size: 1.2rem;
+    }
+    .action-card:hover {
+        background: linear-gradient(135deg, #1976d2, #1565c0);
+    }
+    .action-icon {
+        font-size: 1.8rem;
+        margin-right: 0.8rem;
+    }
+    .schedule-card {
+        font-size: 1.1rem;
+    }
+    .schedule-time {
+        font-size: 1.3rem;
+        font-weight: bold;
+    }
+    .schedule-details {
+        font-size: 1.1rem;
+    }
+    .notification-card {
+        background: rgba(255, 255, 255, 0.95);
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .notification-time {
+        font-size: 1rem;
+        color: #666;
+    }
+    .unread-notification {
+        background: #e3f2fd;
+    }
+    .btn-lg {
+        font-size: 1.2rem;
+        padding: 0.8rem 1.5rem;
+    }
+</style>
 
-<div class="row g-4">
-    <!-- My Schedule Card -->
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 dashboard-card">
-            <div class="card-body text-center">
-                <i class="fas fa-calendar-alt fa-3x mb-3 text-primary"></i>
-                <h5 class="card-title">My Schedule</h5>
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('view_schedules') }}" class="btn btn-warning">View Schedule</a>
-                </div>
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card dashboard-card text-center p-4">
+                <i class="bi bi-calendar-check card-icon"></i>
+                <div class="stat-number">{{ today_schedule|length if today_schedule else 0 }}</div>
+                <div class="stat-label">Today's Schedules</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card dashboard-card text-center p-4">
+                <i class="bi bi-calendar-x card-icon"></i>
+                <div class="stat-number">{{ upcoming_leaves|length if upcoming_leaves else 0 }}</div>
+                <div class="stat-label">Upcoming Leaves</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card dashboard-card text-center p-4">
+                <i class="bi bi-bell-fill card-icon"></i>
+                <div class="stat-number">{{ unread_count }}</div>
+                <div class="stat-label">Unread Notifications</div>
             </div>
         </div>
     </div>
 
-    <!-- Assigned Routes Card -->
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 dashboard-card">
-            <div class="card-body text-center">
-                <i class="fas fa-route fa-3x mb-3 text-primary"></i>
-                <h5 class="card-title">Assigned Routes</h5>
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('view_schedules') }}" class="btn btn-warning">View Assignments</a>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Today's Schedule</h4>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Leave & Attendance Card -->
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 dashboard-card">
-            <div class="card-body text-center">
-                <i class="fas fa-clipboard-list fa-3x mb-3 text-primary"></i>
-                <h5 class="card-title">Leave & Attendance</h5>
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('my_leaves') }}" class="btn btn-warning">Check Records</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Profile Settings Card -->
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 dashboard-card">
-            <div class="card-body text-center">
-                <i class="fas fa-user-cog fa-3x mb-3 text-primary"></i>
-                <h5 class="card-title">Profile Settings</h5>
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('profile') }}" class="btn btn-warning">Settings</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Today's Schedule Section -->
-<div class="row mt-4">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Today's Schedule</h5>
-                <a href="{{ url_for('view_schedules') }}" class="btn btn-sm btn-warning">View All</a>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Route</th>
-                                <th>Bus No.</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for schedule in todays_schedules %}
-                            <tr>
-                                <td>{{ schedule.start_time }} - {{ schedule.end_time }}</td>
-                                <td>{{ schedule.route }}</td>
-                                <td>{{ schedule.bus_number }}</td>
-                                <td><span class="badge status-{{ schedule.status }}">{{ schedule.status|title }}</span></td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary">View Details</button>
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="5" class="text-center">No schedules for today</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Quick Actions</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('apply_leave') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-calendar-plus me-2"></i>Apply for Leave
-                    </a>
-                    <a href="{{ url_for('request_shift_swap') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-exchange-alt me-2"></i>Request Shift Swap
-                    </a>
-                    <a href="{{ url_for('upload_license') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-id-card me-2"></i>Upload License
-                    </a>
-                    <a href="{{ url_for('manage_breaks') }}" class="btn btn-outline-primary">
-                        <i class="fas fa-coffee me-2"></i>Manage Breaks
-                    </a>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Leave Status Card -->
-        <div class="card mt-3">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Leave Status</h5>
-            </div>
-            <div class="card-body">
-                <div class="list-group list-group-flush">
-                    {% for leave in recent_leaves %}
-                    <div class="list-group-item">
-                        <div class="d-flex w-100 justify-content-between">
-                            <h6 class="mb-1">{{ leave.date }}</h6>
-                            <span class="badge status-{{ leave.status }}">{{ leave.status|title }}</span>
-                        </div>
-                        <small class="text-muted">{{ leave.reason }}</small>
-                    </div>
+                <div class="card-body">
+                    {% if today_schedule %}
+                        {% for schedule in today_schedule %}
+                            <div class="card schedule-card mb-3">
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="schedule-time">
+                                                {{ schedule.start_time.strftime('%H:%M') }} - {{ schedule.end_time.strftime('%H:%M') }}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <div class="schedule-details">
+                                                <strong>Route:</strong> {{ schedule.route }}<br>
+                                                <strong>Bus Number:</strong> {{ schedule.bus_number }}<br>
+                                                <strong>Capacity:</strong> {{ schedule.capacity }}
+                                                {% if schedule.is_peak_hour %}
+                                                    <span class="badge bg-warning text-dark">Peak Hour</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
                     {% else %}
-                    <p class="text-muted mb-0">No recent leave requests</p>
-                {% endfor %}
+                        <div class="text-center py-4">
+                            <h4>No schedules for today</h4>
+                            <p class="text-muted">You have no scheduled routes for today.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Quick Actions</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('view_schedules') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                                <i class="bi bi-calendar-week action-icon"></i>
+                                View Schedules
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('apply_leave') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                                <i class="bi bi-calendar-plus action-icon"></i>
+                                Apply for Leave
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('view_license') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                                <i class="bi bi-file-earmark-text action-icon"></i>
+                                View License
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('mark_attendance') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                                <i class="bi bi-clipboard-check action-icon"></i>
+                                Mark Attendance
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('request_shift_swap') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                                <i class="bi bi-arrow-left-right action-icon"></i>
+                                Request Shift Swap
+                            </a>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <a href="{{ url_for('view_attendance') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                                <i class="bi bi-clock-history action-icon"></i>
+                                Attendance History
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Recent Notifications</h4>
+                </div>
+                <div class="card-body p-0">
+                    {% if recent_notifications %}
+                        {% for notification in recent_notifications %}
+                            <div class="p-3 border-bottom {% if not notification.is_read %}unread-notification{% endif %}">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h6 class="mb-1">{{ notification.title }}</h6>
+                                        <p class="mb-1">{{ notification.message }}</p>
+                                    </div>
+                                    <small class="notification-time">{{ notification.created_at.strftime('%H:%M') }}</small>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="p-3 text-center">
+                            <p class="mb-0">No recent notifications</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-id-card card-icon text-primary mb-3"></i>
+                    <h5 class="card-title stat-label">License</h5>
+                    <p class="card-text stat-number">{{ 'Valid' if license and license.expiry_date > now else 'Expired' }}</p>
+                    <a href="{{ url_for('view_license') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-eye action-icon"></i> View License
+                    </a>
                 </div>
             </div>
         </div>

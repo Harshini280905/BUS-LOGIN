@@ -2,134 +2,123 @@
 
 {% block title %}Attendance - Navis{% endblock %}
 
-{% block content %}
-<div class="row mb-4">
-    <div class="col">
-        <div class="d-flex justify-content-between align-items-center">
-            <h2 class="mb-0">📝 Daily Attendance</h2>
-            <a href="{{ url_for('driver_dashboard') }}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-            </a>
-        </div>
-    </div>
-</div>
+{% block styles %}
+<style>
+    .attendance-container {
+        min-height: 100vh;
+        padding: 2rem;
+    }
+    
+    .camera-container {
+        width: 100%;
+        max-width: 640px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    #video {
+        width: 100%;
+        border-radius: 8px;
+    }
+    
+    .capture-btn {
+        margin: 1rem 0;
+    }
+    
+    .attendance-status {
+        margin-top: 2rem;
+    }
+    
+    .status-card {
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .status-time {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    .captured-image {
+        width: 100%;
+        max-width: 320px;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+</style>
+{% endblock %}
 
-<!-- Today's Attendance Card -->
-<div class="card mb-4">
-    <div class="card-header bg-primary text-white">
-        <h5 class="mb-0">Today's Attendance ({{ today.strftime('%Y-%m-%d') }})</h5>
-    </div>
-    <div class="card-body">
-        {% if not today_attendance %}
-        <form method="POST" action="{{ url_for('mark_attendance') }}">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <label class="form-label">Check-in Time</label>
-                    <input type="time" class="form-control" name="check_in_time" required>
+{% block content %}
+<div class="attendance-container">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="camera-container">
+                <h4 class="text-center mb-4">Attendance Check</h4>
+                
+                <div class="text-center">
+                    <video id="video" autoplay></video>
+                    <canvas id="canvas" style="display: none;"></canvas>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Status</label>
-                    <select class="form-select" name="status" required>
-                        <option value="present">Present</option>
-                        <option value="late">Late</option>
-                        <option value="half_day">Half Day</option>
-                    </select>
+                
+                <div class="text-center capture-btn">
+                    <button id="capture" class="btn btn-primary">Capture Photo</button>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Notes (Optional)</label>
-                    <input type="text" class="form-control" name="notes" placeholder="Any comments...">
-                </div>
-                <div class="col-12">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-clock me-2"></i>Mark Check-in
-                    </button>
-                </div>
+                
+                <form id="attendanceForm" method="POST" action="{{ url_for('mark_attendance') }}">
+                    <input type="hidden" name="photo_data" id="photoData">
+                    <input type="hidden" name="action" id="actionType">
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-success" id="checkInBtn" disabled>
+                            Check In
+                        </button>
+                        <button type="submit" class="btn btn-danger" id="checkOutBtn" disabled>
+                            Check Out
+                        </button>
+                    </div>
+                </form>
             </div>
-        </form>
-        {% elif not today_attendance.check_out_time %}
-        <form method="POST" action="{{ url_for('mark_checkout') }}">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <p><strong>Check-in Time:</strong> {{ today_attendance.check_in_time }}</p>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="attendance-status">
+                <h4 class="mb-4">Today's Attendance</h4>
+                
+                {% if attendance %}
+                <div class="status-card">
+                    <h5>Check In</h5>
+                    {% if attendance.check_in_time %}
+                    <p class="status-time">
+                        Time: {{ attendance.check_in_time.strftime('%I:%M %p') }}
+                    </p>
+                    <img src="data:image/jpeg;base64,{{ attendance.check_in_photo }}" 
+                         class="captured-image" alt="Check In Photo">
+                    {% else %}
+                    <p class="text-muted">Not checked in yet</p>
+                    {% endif %}
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Check-out Time</label>
-                    <input type="time" class="form-control" name="check_out_time" required>
+                
+                <div class="status-card">
+                    <h5>Check Out</h5>
+                    {% if attendance.check_out_time %}
+                    <p class="status-time">
+                        Time: {{ attendance.check_out_time.strftime('%I:%M %p') }}
+                    </p>
+                    <img src="data:image/jpeg;base64,{{ attendance.check_out_photo }}" 
+                         class="captured-image" alt="Check Out Photo">
+                    {% else %}
+                    <p class="text-muted">Not checked out yet</p>
+                    {% endif %}
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Notes (Optional)</label>
-                    <input type="text" class="form-control" name="notes" placeholder="Any comments...">
-                </div>
-                <div class="col-12">
-                    <button type="submit" class="btn btn-success">
-                        <i class="fas fa-clock me-2"></i>Mark Check-out
-                    </button>
-                </div>
-            </div>
-        </form>
-        {% else %}
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>Check-in Time:</strong> {{ today_attendance.check_in_time }}</p>
-                <p><strong>Check-out Time:</strong> {{ today_attendance.check_out_time }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Status:</strong> 
-                    <span class="badge status-{{ today_attendance.status }}">
-                        {{ today_attendance.status|title }}
-                    </span>
-                </p>
-                {% if today_attendance.notes %}
-                <p><strong>Notes:</strong> {{ today_attendance.notes }}</p>
+                {% else %}
+                <p class="text-muted">No attendance record for today</p>
                 {% endif %}
             </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- Attendance History -->
-<div class="card">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">Attendance History</h5>
-        <button class="btn btn-warning btn-sm" onclick="exportAttendance()">
-            <i class="fas fa-download me-2"></i>Export
-        </button>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Check-in</th>
-                        <th>Check-out</th>
-                        <th>Status</th>
-                        <th>Working Hours</th>
-                        <th>Notes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for record in attendance_history %}
-                    <tr>
-                        <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
-                        <td>{{ record.check_in_time }}</td>
-                        <td>{{ record.check_out_time or 'Not checked out' }}</td>
-                        <td>
-                            <span class="badge status-{{ record.status }}">
-                                {{ record.status|title }}
-                            </span>
-                        </td>
-                        <td>{{ record.working_hours or 'N/A' }}</td>
-                        <td>{{ record.notes or '-' }}</td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center">No attendance records found</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
         </div>
     </div>
 </div>
@@ -137,21 +126,48 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Set default check-in/out time to current time
-    const timeInputs = document.querySelectorAll('input[type="time"]');
-    const now = new Date();
-    const currentTime = now.getHours().toString().padStart(2, '0') + ':' + 
-                       now.getMinutes().toString().padStart(2, '0');
-    
-    timeInputs.forEach(input => {
-        input.value = currentTime;
-    });
-});
+    let video = document.getElementById('video');
+    let canvas = document.getElementById('canvas');
+    let context = canvas.getContext('2d');
+    let photoData = document.getElementById('photoData');
+    let actionType = document.getElementById('actionType');
+    let checkInBtn = document.getElementById('checkInBtn');
+    let checkOutBtn = document.getElementById('checkOutBtn');
+    let captureBtn = document.getElementById('capture');
+    let capturedImage = null;
 
-function exportAttendance() {
-    // Add export functionality here
-    alert('Attendance report will be exported...');
-}
+    // Set canvas size
+    canvas.width = 640;
+    canvas.height = 480;
+
+    // Get camera access
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(function(stream) {
+            video.srcObject = stream;
+        })
+        .catch(function(err) {
+            console.error("Error accessing camera: ", err);
+            alert("Error accessing camera. Please ensure camera permissions are granted.");
+        });
+
+    // Capture photo
+    captureBtn.addEventListener('click', function() {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        capturedImage = canvas.toDataURL('image/jpeg');
+        photoData.value = capturedImage;
+        
+        // Enable buttons
+        checkInBtn.disabled = false;
+        checkOutBtn.disabled = false;
+    });
+
+    // Handle check in/out
+    checkInBtn.addEventListener('click', function() {
+        actionType.value = 'check_in';
+    });
+
+    checkOutBtn.addEventListener('click', function() {
+        actionType.value = 'check_out';
+    });
 </script>
 {% endblock %} 

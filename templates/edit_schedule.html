@@ -1,45 +1,115 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Schedule</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <style>
-        body {
-            background-color: #87CEEB; /* Sky light blue */
+{% extends "base.html" %}
+
+{% block title %}Edit Schedule - Navis{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h3>Edit Schedule</h3>
+        </div>
+        <div class="card-body">
+            <form method="POST" class="needs-validation" novalidate>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="date" name="date" 
+                               value="{{ schedule.date.strftime('%Y-%m-%d') }}" 
+                               min="{{ today.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="driver" class="form-label">Driver</label>
+                        <select class="form-select" id="driver" name="driver" required>
+                            <option value="">Select Driver</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.username }}" 
+                                    {% if driver.username == schedule.assigned_driver %}selected{% endif %}>
+                                {{ driver.full_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="start_time" class="form-label">Start Time</label>
+                        <input type="time" class="form-control" id="start_time" name="start_time" 
+                               value="{{ schedule.start_time.strftime('%H:%M') }}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="end_time" class="form-label">End Time</label>
+                        <input type="time" class="form-control" id="end_time" name="end_time" 
+                               value="{{ schedule.end_time.strftime('%H:%M') }}" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="route" class="form-label">Route</label>
+                        <input type="text" class="form-control" id="route" name="route" 
+                               value="{{ schedule.route }}" 
+                               placeholder="Enter route (e.g. City Center - Airport)" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="bus_number" class="form-label">Bus Number</label>
+                        <input type="text" class="form-control" id="bus_number" name="bus_number" 
+                               value="{{ schedule.bus_number }}" 
+                               pattern="[A-Z0-9-]+" 
+                               title="Only uppercase letters, numbers, and hyphens allowed" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="capacity" class="form-label">Capacity</label>
+                        <input type="number" class="form-control" id="capacity" name="capacity" 
+                               value="{{ schedule.capacity }}" min="1" max="100" required>
+                    </div>
+                    <div class="col-md-6 mb-3 d-flex align-items-end">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="is_peak_hour" name="is_peak_hour"
+                                   {% if schedule.is_peak_hour %}checked{% endif %}>
+                            <label class="form-check-label" for="is_peak_hour">Peak Hour Schedule</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Update Schedule</button>
+                        <a href="{{ url_for('manage_schedules') }}" class="btn btn-secondary">Back</a>
+        </div>
+        </div>
+            </form>
+        </div>
+        </div>
+        </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('.needs-validation');
+    form.addEventListener('submit', function(event) {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
         }
-    </style>
-</head>
-<body class="container mt-5">
-    <h2>Edit Schedule</h2>
-    <form method="POST">
-        <div class="mb-3">
-            <label>Start Time:</label>
-            <input type="text" name="start_time" class="form-control" value="{{ schedule.start_time }}" required>
-        </div>
-        <div class="mb-3">
-            <label>End Time:</label>
-            <input type="text" name="end_time" class="form-control" value="{{ schedule.end_time }}" required>
-        </div>
-        <div class="mb-3">
-            <label>Route:</label>
-            <input type="text" name="route" class="form-control" value="{{ schedule.route }}" required>
-        </div>
-        <div class="mb-3">
-            <label>Bus Number:</label>
-            <input type="text" name="bus_number" class="form-control" value="{{ schedule.bus_number }}" required>
-        </div>
-        <div class="mb-3">
-            <label>Capacity:</label>
-            <input type="number" name="capacity" class="form-control" value="{{ schedule.capacity }}" required>
-        </div>
-        <div class="mb-3">
-            <label>Assigned Driver:</label>
-            <input type="text" name="assigned_driver" class="form-control" value="{{ schedule.assigned_driver }}" required>
-        </div>
-        <button type="submit" class="btn btn-success">Update Schedule</button>
-        <a href="{{ url_for('index') }}" class="btn btn-secondary">Back</a>
-    </form>
-</body>
-</html>
+        form.classList.add('was-validated');
+    });
+
+    // Time validation
+    const startTime = document.getElementById('start_time');
+    const endTime = document.getElementById('end_time');
+
+    function validateTimes() {
+        if (startTime.value && endTime.value) {
+            if (endTime.value <= startTime.value) {
+                endTime.setCustomValidity('End time must be after start time');
+            } else {
+                endTime.setCustomValidity('');
+            }
+        }
+    }
+
+    startTime.addEventListener('change', validateTimes);
+    endTime.addEventListener('change', validateTimes);
+});
+</script>
+{% endblock %}

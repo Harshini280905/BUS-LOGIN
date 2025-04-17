@@ -3,95 +3,68 @@
 {% block title %}Apply for Leave - Navis{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col">
-        <div class="d-flex justify-content-between align-items-center">
-            <h2 class="mb-0">🗓️ Apply for Leave</h2>
-            <a href="{{ url_for('driver_dashboard') }}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-            </a>
-        </div>
-    </div>
-</div>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Apply for Leave</h5>
+                    <a href="{{ url_for('driver_dashboard') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('apply_leave') }}">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="start_date" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="start_date" name="start_date" 
+                                       min="{{ today }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="end_date" class="form-label">End Date</label>
+                                <input type="date" class="form-control" id="end_date" name="end_date" 
+                                       min="{{ today }}" required>
+                            </div>
+                        </div>
 
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('apply_leave') }}">
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Start Date</label>
-                            <input type="date" class="form-control" name="start_date" required min="{{ today }}">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="leave_type" class="form-label">Leave Type</label>
+                                <select class="form-select" id="leave_type" name="leave_type" required>
+                                    <option value="">Select Leave Type</option>
+                                    <option value="sick">Sick Leave</option>
+                                    <option value="personal">Personal Leave</option>
+                                    <option value="vacation">Vacation</option>
+                                    <option value="emergency">Emergency Leave</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="session" class="form-label">Session</label>
+                                <select class="form-select" id="session" name="session" required>
+                                    <option value="">Select Session</option>
+                                    <option value="full_day">Full Day</option>
+                                    <option value="half_day_morning">Half Day (Morning)</option>
+                                    <option value="half_day_afternoon">Half Day (Afternoon)</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">End Date</label>
-                            <input type="date" class="form-control" name="end_date" required min="{{ today }}">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Leave Type</label>
-                            <select class="form-select" name="leave_type" required>
-                                <option value="">Select leave type...</option>
-                                <option value="casual">Casual Leave</option>
-                                <option value="sick">Sick Leave</option>
-                                <option value="emergency">Emergency Leave</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Session</label>
-                            <select class="form-select" name="session" required>
-                                <option value="full_day">Full Day</option>
-                                <option value="half_day_morning">Half Day (Morning)</option>
-                                <option value="half_day_afternoon">Half Day (Afternoon)</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Reason for Leave</label>
-                            <textarea class="form-control" name="reason" rows="3" required></textarea>
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Contact During Leave</label>
-                            <input type="tel" class="form-control" name="contact" required>
-                        </div>
-                        <div class="col-12">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-paper-plane me-2"></i>Submit Leave Request
-                            </button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
 
-        <!-- Leave Balance Card -->
-        <div class="card mt-4">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Leave Balance</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="text-center">
-                            <h6>Casual Leave</h6>
-                            <h3>{{ leave_balance.casual or 0 }}/{{ leave_balance.casual_total or 12 }}</h3>
-                            <small class="text-muted">Days Remaining</small>
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Reason for Leave</label>
+                            <textarea class="form-control" id="reason" name="reason" rows="3" required></textarea>
                         </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="text-center">
-                            <h6>Sick Leave</h6>
-                            <h3>{{ leave_balance.sick or 0 }}/{{ leave_balance.sick_total or 7 }}</h3>
-                            <small class="text-muted">Days Remaining</small>
+
+                        <div class="mb-3">
+                            <label for="contact" class="form-label">Contact During Leave</label>
+                            <input type="tel" class="form-control" id="contact" name="contact" 
+                                   placeholder="Emergency contact number" required>
                         </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="text-center">
-                            <h6>Emergency Leave</h6>
-                            <h3>{{ leave_balance.emergency or 0 }}/{{ leave_balance.emergency_total or 5 }}</h3>
-                            <small class="text-muted">Days Remaining</small>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Submit Leave Request</button>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -102,11 +75,9 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const startDate = document.querySelector('input[name="start_date"]');
-    const endDate = document.querySelector('input[name="end_date"]');
-    const session = document.querySelector('select[name="session"]');
+    const startDate = document.getElementById('start_date');
+    const endDate = document.getElementById('end_date');
 
-    // Update end date min value when start date changes
     startDate.addEventListener('change', function() {
         endDate.min = this.value;
         if (endDate.value && endDate.value < this.value) {
@@ -114,13 +85,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Disable session selection for multiple days
     endDate.addEventListener('change', function() {
-        if (this.value !== startDate.value) {
-            session.value = 'full_day';
-            session.disabled = true;
-        } else {
-            session.disabled = false;
+        if (this.value < startDate.value) {
+            this.value = startDate.value;
         }
     });
 });

@@ -1,109 +1,166 @@
 {% extends "base.html" %}
 
+{% block title %}Manage Breaks - Navis{% endblock %}
+
+{% block styles %}
+<style>
+    .break-card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .break-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    .break-time {
+        font-size: 1.1em;
+        color: #666;
+    }
+    .break-status {
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 0.9em;
+    }
+    .status-scheduled {
+        background-color: #e3f2fd;
+        color: #1976d2;
+    }
+    .status-ongoing {
+        background-color: #fff3e0;
+        color: #f57c00;
+    }
+    .status-completed {
+        background-color: #e8f5e9;
+        color: #388e3c;
+    }
+    .break-actions {
+        margin-top: 15px;
+    }
+    .break-actions .btn {
+        margin-right: 10px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Manage Break Periods</h2>
-        <a href="{{ url_for('driver_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
-    </div>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
+<div class="container mt-4">
     <div class="row">
-        <div class="col-md-6">
+        <div class="col-md-12">
+            <h2 class="mb-4">Manage Breaks</h2>
+            
+            <!-- Break Scheduling Form -->
             <div class="card mb-4">
                 <div class="card-header">
-                    <h5 class="mb-0">Schedule Break</h5>
+                    <h5 class="mb-0">Schedule New Break</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST">
-                        <div class="mb-3">
-                            <label for="schedule_id" class="form-label">Select Schedule</label>
-                            <select class="form-select" id="schedule_id" name="schedule_id" required>
-                                <option value="">Choose a schedule...</option>
-                                {% for schedule in schedules %}
-                                    <option value="{{ schedule.id }}">
-                                        {{ schedule.route }} ({{ schedule.start_time }} - {{ schedule.end_time }})
-                                    </option>
-                                {% endfor %}
-                            </select>
+                    <form method="POST" action="{{ url_for('manage_breaks') }}">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="driver" class="form-label">Driver</label>
+                                <select class="form-select" id="driver" name="driver" required>
+                                    <option value="">Select Driver</option>
+                                    {% for driver in drivers %}
+                                    <option value="{{ driver.username }}">{{ driver.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="date" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="date" name="date" 
+                                       min="{{ today.strftime('%Y-%m-%d') }}" required>
+                            </div>
                         </div>
-
-                        <div class="mb-3">
-                            <label for="break_type" class="form-label">Break Type</label>
-                            <select class="form-select" id="break_type" name="break_type" required>
-                                <option value="rest">Rest Break</option>
-                                <option value="lunch">Lunch Break</option>
-                                <option value="emergency">Emergency Break</option>
-                            </select>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="start_time" class="form-label">Start Time</label>
+                                <input type="time" class="form-control" id="start_time" name="start_time" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="end_time" class="form-label">End Time</label>
+                                <input type="time" class="form-control" id="end_time" name="end_time" required>
+                            </div>
                         </div>
-
                         <div class="mb-3">
-                            <label for="start_time" class="form-label">Start Time</label>
-                            <input type="datetime-local" class="form-control" id="start_time" name="start_time" required>
+                            <label for="reason" class="form-label">Reason</label>
+                            <textarea class="form-control" id="reason" name="reason" rows="3"></textarea>
                         </div>
-
                         <button type="submit" class="btn btn-primary">Schedule Break</button>
                     </form>
                 </div>
             </div>
-        </div>
 
-        <div class="col-md-6">
+            <!-- Break List -->
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Today's Breaks</h5>
+                    <h5 class="mb-0">Scheduled Breaks</h5>
                 </div>
                 <div class="card-body">
-                    {% if breaks %}
-                        {% for break in breaks %}
-                            <div class="break-item mb-3 p-3 border rounded">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <h6>{{ break.break_type|title }} Break</h6>
-                                        <p class="mb-1">
-                                            <strong>Start:</strong> {{ break.start_time.strftime('%H:%M') }}
-                                            {% if break.end_time %}
-                                                <br><strong>End:</strong> {{ break.end_time.strftime('%H:%M') }}
-                                            {% endif %}
-                                        </p>
-                                        <span class="badge {% if break.status == 'scheduled' %}bg-info{% elif break.status == 'ongoing' %}bg-warning{% else %}bg-success{% endif %}">
-                                            {{ break.status|title }}
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Driver</th>
+                                    <th>Date</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for break in breaks %}
+                                <tr>
+                                    <td>{{ break.driver_username }}</td>
+                                    <td>{{ break.start_time.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ break.start_time.strftime('%H:%M') }}</td>
+                                    <td>{{ break.end_time.strftime('%H:%M') }}</td>
+                                    <td>{{ break.break_type }}</td>
+                                    <td>
+                                        <span class="break-status status-{{ break.status }}">
+                                            {{ break.status }}
                                         </span>
-                                    </div>
-                                    <div>
-                                        {% if break.status == 'scheduled' %}
-                                            <a href="{{ url_for('start_break', break_id=break.id) }}" class="btn btn-sm btn-success">Start Break</a>
-                                        {% elif break.status == 'ongoing' %}
-                                            <a href="{{ url_for('end_break', break_id=break.id) }}" class="btn btn-sm btn-warning">End Break</a>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <p class="text-muted">No breaks scheduled for today.</p>
-                    {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            {% if break.status == 'scheduled' %}
+                                            <a href="{{ url_for('start_break', break_id=break.id) }}" 
+                                               class="btn btn-sm btn-warning">Start</a>
+                                            {% elif break.status == 'ongoing' %}
+                                            <a href="{{ url_for('end_break', break_id=break.id) }}" 
+                                               class="btn btn-sm btn-success">End</a>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
 {% block scripts %}
 <script>
-    // Set min date to today
-    document.addEventListener('DOMContentLoaded', function() {
-        const today = new Date().toISOString().split('T')[0];
-        document.getElementById('start_time').min = today + 'T00:00';
+    // Validate end time is after start time
+    document.getElementById('end_time').addEventListener('change', function() {
+        const startTime = document.getElementById('start_time').value;
+        const endTime = this.value;
+        
+        if (startTime && endTime && startTime >= endTime) {
+            alert('End time must be after start time');
+            this.value = '';
+        }
     });
 </script>
-{% endblock %}
-
 {% endblock %} 

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, make_response
+from flask import Flask, render_template, request, redirect, url_for, flash, session, send_from_directory, make_response, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, time, date, timedelta
@@ -6,6 +6,13 @@ from werkzeug.utils import secure_filename
 import os
 from functools import wraps
 from sqlalchemy import or_, and_
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+import base64
+from io import BytesIO
+from PIL import Image
+
+
+
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bus_schedule.db'
@@ -15,14 +22,38 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['UPLOAD_FOLDER_LICENSE'] = 'static/uploads/licenses'
 db = SQLAlchemy(app)
 
+# Initialize LoginManager
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+# User loader function
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 # Ensure upload folder exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['UPLOAD_FOLDER_LICENSE'], exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
 
+@app.context_processor
+def inject_user():
+    return dict(current_user=current_user)
+
+@app.context_processor
+def inject_notifications():
+    unread_count = 0
+    if current_user.is_authenticated:
+        unread_count = Notification.query.filter_by(
+            recipient_username=current_user.username,
+            is_read=False
+        ).count()
+    return dict(unread_count=unread_count)
+
 # Database Models
-class User(db.Model):
+class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(150), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
@@ -41,18 +72,21 @@ class User(db.Model):
 
 class Schedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    start_time = db.Column(db.String(50), nullable=False)
-    end_time = db.Column(db.String(50), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=False)
     route = db.Column(db.String(100), nullable=False)
     bus_number = db.Column(db.String(20), nullable=False)
     capacity = db.Column(db.Integer, nullable=False)
-    assigned_driver = db.Column(db.String(100), nullable=False)
+    assigned_driver = db.Column(db.String(150), db.ForeignKey('user.username'))
     is_peak_hour = db.Column(db.Boolean, default=False)
-    schedule_type = db.Column(db.String(20), default='regular')  # regular, special, emergency
+    schedule_type = db.Column(db.String(20), default='regular')
     created_by = db.Column(db.String(150), db.ForeignKey('user.username'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_modified = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(20), default='scheduled')  # scheduled, in_progress, completed, cancelled
+    status = db.Column(db.String(20), default='pending')  # pending, assigned, acknowledged, completed
+    driver_acknowledged = db.Column(db.Boolean, default=False)
+    acknowledgment_time = db.Column(db.DateTime)
 
 class LeaveRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -72,6 +106,13 @@ class DriverLicense(db.Model):
     file_path = db.Column(db.String(255), nullable=False)
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(20), default='pending')  # pending, approved, rejected
+    expiry_date = db.Column(db.Date)
+    license_number = db.Column(db.String(50))
+    license_type = db.Column(db.String(50))  # e.g., Class A, Class B, etc.
+    driver = db.relationship('User', backref=db.backref('license', uselist=False))
+
+    def __repr__(self):
+        return f'<DriverLicense {self.driver_username}>'
 
 class ShiftSwap(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -86,29 +127,31 @@ class ShiftSwap(db.Model):
 
 class Attendance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    driver_username = db.Column(db.String(150), db.ForeignKey('user.username'), nullable=False)
+    driver_username = db.Column(db.String(150), db.ForeignKey('user.username'))
     date = db.Column(db.Date, nullable=False)
-    check_in = db.Column(db.DateTime)
-    check_out = db.Column(db.DateTime)
-    status = db.Column(db.String(20), default='pending')  # pending, present, absent, on_leave
-    schedule_id = db.Column(db.Integer, db.ForeignKey('schedule.id'), nullable=False)
+    check_in_time = db.Column(db.DateTime)
+    check_out_time = db.Column(db.DateTime)
+    check_in_photo = db.Column(db.Text)  # Store base64 encoded image
+    check_out_photo = db.Column(db.Text)  # Store base64 encoded image
+    status = db.Column(db.String(20), default='present')  # present, absent, late
+    total_hours = db.Column(db.Float)
 
 class BreakPeriod(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     driver_username = db.Column(db.String(150), db.ForeignKey('user.username'), nullable=False)
-    schedule_id = db.Column(db.Integer, db.ForeignKey('schedule.id'), nullable=False)
+    schedule_id = db.Column(db.Integer, db.ForeignKey('schedule.id'), nullable=True)
     start_time = db.Column(db.DateTime, nullable=False)
-    end_time = db.Column(db.DateTime)
+    end_time = db.Column(db.DateTime, nullable=False)
     break_type = db.Column(db.String(50), nullable=False)  # rest, lunch, emergency
     status = db.Column(db.String(20), default='scheduled')  # scheduled, ongoing, completed
 
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    recipient_username = db.Column(db.String(150), db.ForeignKey('user.username'), nullable=False)
+    recipient_username = db.Column(db.String(150), db.ForeignKey('user.username'))
     title = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text, nullable=False)
-    notification_type = db.Column(db.String(50), nullable=False)  # schedule_update, emergency, announcement
-    priority = db.Column(db.String(20), default='normal')  # normal, high, urgent
+    notification_type = db.Column(db.String(50))  # schedule, attendance, leave, etc.
+    priority = db.Column(db.String(20), default='normal')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     read_at = db.Column(db.DateTime)
     is_read = db.Column(db.Boolean, default=False)
@@ -136,7 +179,7 @@ class BusAssignment(db.Model):
 
 # Create DB Tables
 with app.app_context():
-    db.drop_all()  # This will reset the database - be careful with this in production!
+    # Only create tables if they don't exist
     db.create_all()
     
     # Check if admin exists
@@ -154,25 +197,87 @@ with app.app_context():
         )
         db.session.add(admin)
     
-    # Add test drivers if they don't exist
+    # Initialize test drivers only if they don't exist
     test_drivers = [
         {
             'username': 'driver1',
             'password': 'driver123',
-            'full_name': 'John Driver',
-            'email': 'john@bus.com',
-            'phone': '1234567891',
-            'address': '123 Driver St',
-            'emergency_contact': '555-0001'
+            'name': 'John Smith',
+            'license_number': 'DL123456',
+            'phone': '1234567890',
+            'email': 'john.smith@example.com'
         },
         {
             'username': 'driver2',
             'password': 'driver123',
-            'full_name': 'Jane Driver',
-            'email': 'jane@bus.com',
-            'phone': '1234567892',
-            'address': '456 Driver Ave',
-            'emergency_contact': '555-0002'
+            'name': 'Michael Johnson',
+            'license_number': 'DL789012',
+            'phone': '9876543210',
+            'email': 'michael.j@example.com'
+        },
+        {
+            'username': 'driver3',
+            'password': 'driver123',
+            'name': 'Robert Williams',
+            'license_number': 'DL345678',
+            'phone': '4567890123',
+            'email': 'robert.w@example.com'
+        },
+        {
+            'username': 'driver4',
+            'password': 'driver123',
+            'name': 'David Brown',
+            'license_number': 'DL901234',
+            'phone': '7890123456',
+            'email': 'david.b@example.com'
+        },
+        {
+            'username': 'driver5',
+            'password': 'driver123',
+            'name': 'James Davis',
+            'license_number': 'DL567890',
+            'phone': '2345678901',
+            'email': 'james.d@example.com'
+        },
+        {
+            'username': 'driver6',
+            'password': 'driver123',
+            'name': 'William Miller',
+            'license_number': 'DL123789',
+            'phone': '8901234567',
+            'email': 'william.m@example.com'
+        },
+        {
+            'username': 'driver7',
+            'password': 'driver123',
+            'name': 'Thomas Wilson',
+            'license_number': 'DL456123',
+            'phone': '3456789012',
+            'email': 'thomas.w@example.com'
+        },
+        {
+            'username': 'driver8',
+            'password': 'driver123',
+            'name': 'Charles Moore',
+            'license_number': 'DL789456',
+            'phone': '6789012345',
+            'email': 'charles.m@example.com'
+        },
+        {
+            'username': 'driver9',
+            'password': 'driver123',
+            'name': 'Joseph Taylor',
+            'license_number': 'DL234567',
+            'phone': '9012345678',
+            'email': 'joseph.t@example.com'
+        },
+        {
+            'username': 'driver10',
+            'password': 'driver123',
+            'name': 'Daniel Anderson',
+            'license_number': 'DL890123',
+            'phone': '5678901234',
+            'email': 'daniel.a@example.com'
         }
     ]
     
@@ -183,11 +288,10 @@ with app.app_context():
                 username=driver_data['username'],
                 password=generate_password_hash(driver_data['password']),
                 role='driver',
-                full_name=driver_data['full_name'],
+                full_name=driver_data['name'],
                 email=driver_data['email'],
                 phone=driver_data['phone'],
-                address=driver_data['address'],
-                emergency_contact=driver_data['emergency_contact']
+                license_number=driver_data['license_number']
             )
             db.session.add(driver)
     
@@ -265,19 +369,34 @@ def check_route_conflict(route, start_time, end_time, exclude_id=None):
 def index():
     return redirect(url_for('login'))
 
-# User Login
+# Login route
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if current_user.is_authenticated:
+        if current_user.role == 'admin':
+            return redirect(url_for('admin_dashboard'))
+        else:
+            return redirect(url_for('driver_dashboard'))
+    
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and check_password_hash(user.password, request.form['password']):
-            session['user_id'] = user.id
-            session['role'] = user.role
-            session['username'] = user.username
-            flash('Login Successful!', 'success')
-            return redirect(url_for('dashboard'))
-        flash('Invalid username or password!', 'danger')
-        return redirect(url_for('login'))
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            user.last_login = datetime.utcnow()
+            db.session.commit()
+            
+            flash('Login successful!', 'success')
+            if user.role == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('driver_dashboard'))
+        else:
+            flash('Invalid username or password!', 'danger')
+    
     return render_template('login.html')
 
 # Forgot Password
@@ -333,23 +452,368 @@ def dashboard():
     else:
         return redirect(url_for('driver_dashboard'))
 
-# Admin Dashboard
-@app.route('/admin_dashboard')
-def admin_dashboard():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-    pending_leaves = get_pending_leave_count()
-    pending_notifications = get_pending_notifications(session['username'])
-    return render_template('admin_dashboard.html', pending_leaves=pending_leaves, pending_notifications=pending_notifications)
+# Schedule Management Routes
+@app.route('/schedules')
+@login_required
+def manage_schedules():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    # Get all schedules with driver information
+    schedules = Schedule.query.order_by(Schedule.date.desc()).all()
+    
+    # Sort schedules by start_time after fetching
+    schedules.sort(key=lambda x: x.start_time.time() if isinstance(x.start_time, datetime) else datetime.strptime(x.start_time, '%H:%M').time())
+    
+    # Get all drivers for the form
+    drivers = User.query.filter_by(role='driver').all()
+    
+    return render_template('manage_schedules.html', 
+                         schedules=schedules,
+                         drivers=drivers,
+                         today=date.today())
 
-# Driver Dashboard
-@app.route('/driver_dashboard')
+@app.route('/schedules/add', methods=['GET', 'POST'])
+@login_required
+def add_schedule():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            date = request.form['date']
+            start_time = request.form['start_time']
+            end_time = request.form['end_time']
+            driver = request.form['driver']
+            bus_number = request.form['bus_number']
+            capacity = int(request.form['capacity'])
+            route = request.form['route']
+            is_peak_hour = 'is_peak_hour' in request.form
+            
+            # Convert date and time strings to DateTime objects
+            schedule_date = datetime.strptime(date, '%Y-%m-%d').date()
+            start_datetime = datetime.combine(schedule_date, datetime.strptime(start_time, '%H:%M').time())
+            end_datetime = datetime.combine(schedule_date, datetime.strptime(end_time, '%H:%M').time())
+            
+            # Check for schedule conflict
+            has_conflict, message = check_schedule_conflict(driver, start_time, end_time)
+            if has_conflict:
+                flash(message, 'danger')
+                return redirect(url_for('manage_schedules'))
+            
+            # Check for approved leave conflicts
+            has_leave_conflict, leave_message = check_leave_conflict(driver, date, start_time, end_time)
+            if has_leave_conflict:
+                flash(leave_message, 'danger')
+                return redirect(url_for('manage_schedules'))
+            
+            # Check for route conflicts
+            has_route_conflict, route_message = check_route_conflict(route, start_time, end_time)
+            if has_route_conflict:
+                flash(route_message, 'danger')
+                return redirect(url_for('manage_schedules'))
+            
+            # Create new schedule
+            new_schedule = Schedule(
+                date=schedule_date,
+                start_time=start_datetime,
+                end_time=end_datetime,
+                route=route,
+                bus_number=bus_number,
+                capacity=capacity,
+                assigned_driver=driver,
+                is_peak_hour=is_peak_hour,
+                created_by=current_user.username,
+                status='scheduled'
+            )
+            
+            db.session.add(new_schedule)
+            
+            # Create notification for the assigned driver
+            notification = Notification(
+                recipient_username=driver,
+                title='New Schedule Assignment',
+                message=f'You have been assigned to route {route} on {date} from {start_time} to {end_time}.',
+                notification_type='schedule_update',
+                priority='high'
+            )
+            db.session.add(notification)
+            
+            db.session.commit()
+            flash('Schedule created successfully!', 'success')
+            return redirect(url_for('manage_schedules'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error creating schedule: {str(e)}', 'danger')
+            return redirect(url_for('manage_schedules'))
+    
+    # GET request - render the form
+    drivers = User.query.filter_by(role='driver').all()
+    return render_template('add_schedule.html', drivers=drivers, today=date.today())
+
+@app.route('/schedules/edit/<int:id>', methods=['GET', 'POST'])
+@login_required
+def edit_schedule(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    schedule = Schedule.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            date = request.form['date']
+            start_time = request.form['start_time']
+            end_time = request.form['end_time']
+            driver = request.form['driver']
+            bus_number = request.form['bus_number']
+            capacity = int(request.form['capacity'])
+            route = request.form['route']
+            is_peak_hour = 'is_peak_hour' in request.form
+            
+            # Convert date and time strings to DateTime objects
+            schedule_date = datetime.strptime(date, '%Y-%m-%d').date()
+            start_datetime = datetime.combine(schedule_date, datetime.strptime(start_time, '%H:%M').time())
+            end_datetime = datetime.combine(schedule_date, datetime.strptime(end_time, '%H:%M').time())
+            
+            # Check for schedule conflict (excluding current schedule)
+            has_conflict, message = check_schedule_conflict(driver, start_time, end_time, exclude_id=id)
+            if has_conflict:
+                flash(message, 'danger')
+                return redirect(url_for('edit_schedule', id=id))
+            
+            # Check for approved leave conflicts
+            has_leave_conflict, leave_message = check_leave_conflict(driver, date, start_time, end_time)
+            if has_leave_conflict:
+                flash(leave_message, 'danger')
+                return redirect(url_for('edit_schedule', id=id))
+            
+            # Check for route conflicts (excluding current schedule)
+            has_route_conflict, route_message = check_route_conflict(route, start_time, end_time, exclude_id=id)
+            if has_route_conflict:
+                flash(route_message, 'danger')
+                return redirect(url_for('edit_schedule', id=id))
+            
+            # Update schedule
+            schedule.date = schedule_date
+            schedule.start_time = start_datetime
+            schedule.end_time = end_datetime
+            schedule.route = route
+            schedule.bus_number = bus_number
+            schedule.capacity = capacity
+            schedule.assigned_driver = driver
+            schedule.is_peak_hour = is_peak_hour
+            schedule.last_modified = datetime.utcnow()
+            
+            # Create notification for the assigned driver
+            notification = Notification(
+                recipient_username=driver,
+                title='Schedule Updated',
+                message=f'Your schedule has been updated for {date} from {start_time} to {end_time} on route {route}.',
+                notification_type='schedule_update',
+                priority='high'
+            )
+            db.session.add(notification)
+            
+            db.session.commit()
+            flash('Schedule updated successfully!', 'success')
+            return redirect(url_for('manage_schedules'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating schedule: {str(e)}', 'danger')
+            return redirect(url_for('edit_schedule', id=id))
+    
+    # GET request - render the edit form
+    drivers = User.query.filter_by(role='driver').all()
+    return render_template('edit_schedule.html', 
+                         schedule=schedule, 
+                         drivers=drivers,
+                         today=date.today())
+
+@app.route('/schedules/delete/<int:id>')
+@login_required
+def delete_schedule(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    schedule = Schedule.query.get_or_404(id)
+    
+    try:
+        # Create notification for the driver
+        notification = Notification(
+            recipient_username=schedule.assigned_driver,
+            title='Schedule Cancelled',
+            message=f'Your schedule for {schedule.date} on route {schedule.route} has been cancelled.',
+            notification_type='schedule_update',
+            priority='high'
+        )
+        db.session.add(notification)
+        
+        db.session.delete(schedule)
+        db.session.commit()
+        flash('Schedule deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting schedule: {str(e)}', 'danger')
+    
+    return redirect(url_for('manage_schedules'))
+
+# Attendance Management Routes
+@app.route('/view-attendance', methods=['GET', 'POST'])
+@login_required
+def view_attendance():
+    if current_user.role != 'admin':
+        flash('Access denied. Admin only.', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    # Get all drivers for the dropdown
+    drivers = User.query.filter_by(role='driver').all()
+    
+    # Get selected driver's attendance if provided
+    selected_driver = request.args.get('driver')
+    attendance_records = []
+    
+    if selected_driver:
+        attendance_records = Attendance.query.filter_by(
+            driver_username=selected_driver
+        ).order_by(Attendance.date.desc()).all()
+    
+    return render_template('view_attendance.html', 
+                         drivers=drivers,
+                         selected_driver=selected_driver,
+                         attendance_records=attendance_records)
+
+@app.route('/attendance/mark', methods=['GET', 'POST'])
+@login_required
+def mark_attendance():
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Get today's attendance record if exists
+    today = date.today()
+    today_attendance = Attendance.query.filter_by(
+        driver_username=current_user.username,
+        date=today
+    ).first()
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        photo_data = request.form.get('photo')
+        
+        if not photo_data:
+            flash('Please capture a photo first!', 'danger')
+            return redirect(url_for('mark_attendance'))
+        
+        current_time = datetime.now()
+        
+        if not today_attendance:
+            if action != 'check_in':
+                flash('You must check in first!', 'danger')
+                return redirect(url_for('mark_attendance'))
+            
+            # Create new attendance record
+            today_attendance = Attendance(
+                driver_username=current_user.username,
+                date=today,
+                check_in_time=current_time,
+                check_in_photo=photo_data,
+                status='present'
+            )
+            db.session.add(today_attendance)
+            flash('Check-in recorded successfully!', 'success')
+        
+        else:
+            if action == 'check_in':
+                if today_attendance.check_in_time:
+                    flash('You have already checked in today!', 'warning')
+                    return redirect(url_for('mark_attendance'))
+                
+                today_attendance.check_in_time = current_time
+                today_attendance.check_in_photo = photo_data
+                flash('Check-in recorded successfully!', 'success')
+            
+            elif action == 'check_out':
+                if today_attendance.check_out_time:
+                    flash('You have already checked out today!', 'warning')
+                    return redirect(url_for('mark_attendance'))
+                
+                today_attendance.check_out_time = current_time
+                today_attendance.check_out_photo = photo_data
+                
+                # Calculate total hours
+                if today_attendance.check_in_time:
+                    time_diff = current_time - today_attendance.check_in_time
+                    today_attendance.total_hours = time_diff.total_seconds() / 3600
+                
+                flash('Check-out recorded successfully!', 'success')
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error recording attendance: {str(e)}', 'danger')
+        
+        return redirect(url_for('mark_attendance'))
+    
+    return render_template('mark_attendance.html', 
+                         today_attendance=today_attendance,
+                         today=today)
+
+# Dashboard Routes
+@app.route('/admin/dashboard')
+@login_required
+def admin_dashboard():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    # Get counts for dashboard
+    total_drivers = User.query.filter_by(role='driver').count()
+    pending_leaves = LeaveRequest.query.filter_by(status='pending').count()
+    active_schedules = Schedule.query.filter_by(status='active').count()
+    recent_notifications = Notification.query.order_by(Notification.created_at.desc()).limit(5).all()
+    
+    return render_template('admin_dashboard.html',
+                         total_drivers=total_drivers,
+                         pending_leaves=pending_leaves,
+                         active_schedules=active_schedules,
+                         recent_notifications=recent_notifications)
+
+@app.route('/driver/dashboard')
+@login_required
 def driver_dashboard():
-    if 'user_id' not in session or session['role'] != 'driver':
-        return redirect(url_for('login'))
-    pending_leaves = get_driver_pending_leaves(session['username'])
-    pending_notifications = get_pending_notifications(session['username'])
-    return render_template('driver_dashboard.html', pending_leaves=pending_leaves, pending_notifications=pending_notifications)
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    # Get driver-specific data
+    today = date.today()
+    today_schedule = Schedule.query.filter_by(
+        assigned_driver=current_user.username,
+        date=today
+    ).first()
+    
+    upcoming_leaves = LeaveRequest.query.filter_by(
+        driver_username=current_user.username,
+        status='approved'
+    ).filter(LeaveRequest.date >= today).all()
+    
+    recent_notifications = Notification.query.filter_by(
+        recipient_username=current_user.username
+    ).order_by(Notification.created_at.desc()).limit(5).all()
+    
+    return render_template('driver_dashboard.html',
+                         today_schedule=today_schedule,
+                         upcoming_leaves=upcoming_leaves,
+                         recent_notifications=recent_notifications)
 
 # View Schedules
 @app.route('/view_schedules')
@@ -365,118 +829,48 @@ def view_schedules():
     
     return render_template('view_schedules.html', schedules=schedules)
 
-# Create Schedule with enhanced conflict checking
-@app.route('/add', methods=['GET', 'POST'])
-def add_schedule():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        start_time = request.form['start_time']
-        end_time = request.form['end_time']
-        route = request.form['route']
-        driver = request.form['assigned_driver']
-        
-        # Check for schedule conflict
-        has_conflict, message = check_schedule_conflict(driver, start_time, end_time)
-        if has_conflict:
-            flash(message, 'danger')
-            return redirect(url_for('add_schedule'))
-        
-        # Check for route conflict
-        has_route_conflict, route_message = check_route_conflict(route, start_time, end_time)
-        if has_route_conflict:
-            flash(route_message, 'danger')
-            return redirect(url_for('add_schedule'))
-        
-        # Check for approved leave conflicts
-        leaves = LeaveRequest.query.filter_by(
-            driver_username=driver,
-            status='approved'
-        ).all()
-        
-        for leave in leaves:
-            if (start_time >= leave.start_time and start_time <= leave.end_time) or \
-               (end_time >= leave.start_time and end_time <= leave.end_time):
-                flash(f'Cannot assign schedule: Driver has approved leave during this time.', 'danger')
-                return redirect(url_for('add_schedule'))
-        
-        new_schedule = Schedule(
-            start_time=start_time,
-            end_time=end_time,
-            route=route,
-            bus_number=request.form['bus_number'],
-            capacity=request.form['capacity'],
-            assigned_driver=driver
-        )
-        db.session.add(new_schedule)
-        db.session.commit()
-        flash('Schedule Created Successfully!', 'success')
-        return redirect(url_for('view_schedules'))
-    
-    return render_template('add_schedule.html')
-
-# Edit Schedule
-@app.route('/edit/<int:id>', methods=['GET', 'POST'])
-def edit_schedule(id):
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-    schedule = Schedule.query.get(id)
-    if request.method == 'POST':
-        # Check for driver schedule conflict
-        existing_schedule = Schedule.query.filter(
-            Schedule.assigned_driver == request.form['assigned_driver'],
-            Schedule.start_time == request.form['start_time'],
-            Schedule.route == request.form['route'],
-            Schedule.id != id
-        ).first()
-        
-        if existing_schedule:
-            flash('Error: This driver is already assigned to the same route at the same time!', 'danger')
-            return redirect(url_for('edit_schedule', id=id))
-            
-        schedule.start_time = request.form['start_time']
-        schedule.end_time = request.form['end_time']
-        schedule.route = request.form['route']
-        schedule.bus_number = request.form['bus_number']
-        schedule.capacity = request.form['capacity']
-        schedule.assigned_driver = request.form['assigned_driver']
-        db.session.commit()
-        flash('Schedule Updated Successfully!', 'info')
-        return redirect(url_for('view_schedules'))
-    return render_template('edit_schedule.html', schedule=schedule)
-
-# Delete Schedule
-@app.route('/delete/<int:id>')
-def delete_schedule(id):
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-    schedule = Schedule.query.get(id)
-    db.session.delete(schedule)
-    db.session.commit()
-    flash('Schedule Deleted!', 'danger')
-    return redirect(url_for('view_schedules'))
-
 # Apply for Leave
 @app.route('/apply-leave', methods=['GET', 'POST'])
+@login_required
 def apply_leave():
-    if 'user_id' not in session or session['role'] != 'driver':
-        return redirect(url_for('login'))
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
     
     if request.method == 'POST':
-        new_leave = LeaveRequest(
-            driver_username=session['username'],
-            date=request.form['date'],
-            start_time=request.form['start_time'],
-            end_time=request.form['end_time'],
-            reason=request.form['reason']
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+        leave_type = request.form.get('leave_type')
+        session = request.form.get('session')
+        reason = request.form.get('reason')
+        contact = request.form.get('contact')
+        
+        # Create leave request
+        leave_request = LeaveRequest(
+            driver_username=current_user.username,
+            date=start_date,
+            start_time='00:00' if session in ['full_day', 'half_day_morning'] else '12:00',
+            end_time='23:59' if session in ['full_day', 'half_day_afternoon'] else '12:00',
+            reason=reason,
+            status='pending'
         )
-        db.session.add(new_leave)
+        db.session.add(leave_request)
+        
+        # Create notification for admin
+        notification = Notification(
+            recipient_username='admin',
+            title='New Leave Request',
+            message=f'Driver {current_user.username} has requested leave from {start_date} to {end_date}.',
+            notification_type='leave_request',
+            priority='normal'
+        )
+        db.session.add(notification)
         db.session.commit()
+        
         flash('Leave request submitted successfully!', 'success')
-        return redirect(url_for('driver_dashboard'))
+        return redirect(url_for('my_leaves'))
     
-    return render_template('apply_leave.html')
+    return render_template('apply_leave.html', today=date.today().strftime('%Y-%m-%d'))
 
 # Manage Leave Requests
 @app.route('/manage-leaves')
@@ -489,27 +883,49 @@ def manage_leaves():
 
 # Handle Leave Request with Response
 @app.route('/handle-leave/<int:id>/<string:action>', methods=['POST'])
+@login_required
 def handle_leave(id, action):
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
     
     leave_request = LeaveRequest.query.get_or_404(id)
     response = request.form.get('response', '')
     
-    if action in ['approve', 'reject']:
+    try:
         if action == 'approve':
             # Check for schedule conflicts
-            schedules = Schedule.query.filter_by(assigned_driver=leave_request.driver_username).all()
-            for schedule in schedules:
-                if schedule.start_time <= leave_request.end_time and schedule.end_time >= leave_request.start_time:
-                    flash('Cannot approve leave: Driver has scheduled routes during this time.', 'danger')
-                    return redirect(url_for('manage_leaves'))
+            schedules = Schedule.query.filter_by(
+                assigned_driver=leave_request.driver_username,
+                date=leave_request.date
+            ).all()
+            
+            if schedules:
+                flash('Cannot approve leave: Driver has scheduled routes on this date.', 'danger')
+                return redirect(url_for('manage_leaves'))
+            
+            leave_request.status = 'approved'
+        elif action == 'reject':
+            leave_request.status = 'rejected'
         
-        leave_request.status = 'approved' if action == 'approve' else 'rejected'
         leave_request.admin_response = response
         leave_request.response_time = datetime.utcnow()
+        
+        # Create notification for driver
+        notification = Notification(
+            recipient_username=leave_request.driver_username,
+            title=f'Leave Request {action.capitalize()}d',
+            message=f'Your leave request for {leave_request.date} has been {action}d. {response}',
+            notification_type='leave',
+            priority='high'
+        )
+        db.session.add(notification)
         db.session.commit()
+        
         flash(f'Leave request {action}d successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error processing leave request: {str(e)}', 'danger')
     
     return redirect(url_for('manage_leaves'))
 
@@ -572,29 +988,72 @@ def update_profile():
         flash(f'Error updating profile: {str(e)}', 'danger')
     
     return redirect(url_for('profile'))
+
 @app.route('/settings')
+@login_required
 def settings():
     return render_template('settings.html')
 
+@app.route('/update-settings', methods=['POST'])
+@login_required
+def update_settings():
+    try:
+        # Update account information
+        if 'full_name' in request.form:
+            current_user.full_name = request.form['full_name']
+        if 'email' in request.form:
+            current_user.email = request.form['email']
+        if 'phone' in request.form:
+            current_user.phone = request.form['phone']
+        
+        # Update password if provided
+        if 'current_password' in request.form and request.form['current_password']:
+            if check_password_hash(current_user.password, request.form['current_password']):
+                if request.form['new_password'] == request.form['confirm_password']:
+                    current_user.password = generate_password_hash(request.form['new_password'])
+                else:
+                    flash('New passwords do not match.', 'danger')
+                    return redirect(url_for('settings'))
+            else:
+                flash('Current password is incorrect.', 'danger')
+                return redirect(url_for('settings'))
+        
+        # Update system settings if admin
+        if current_user.role == 'admin':
+            if 'notifications_enabled' in request.form:
+                # Update notification settings
+                pass
+            if 'timezone' in request.form:
+                # Update timezone settings
+                pass
+        
+        db.session.commit()
+        flash('Settings updated successfully.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash('Error updating settings. Please try again.', 'danger')
+    
+    return redirect(url_for('settings'))
 
 # View My Leave Requests (for drivers)
 @app.route('/my-leaves')
+@login_required
 def my_leaves():
-    if 'user_id' not in session or session['role'] != 'driver':
-        return redirect(url_for('login'))
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
     
     leaves = LeaveRequest.query.filter_by(
-        driver_username=session['username']
+        driver_username=current_user.username
     ).order_by(LeaveRequest.created_at.desc()).all()
     
     return render_template('my_leaves.html', leaves=leaves)
 
-# Logout
+# Logout route
 @app.route('/logout')
+@login_required
 def logout():
-    session.pop('user_id', None)
-    session.pop('role', None)
-    session.pop('username', None)
+    logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
@@ -606,9 +1065,11 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/upload-license', methods=['GET', 'POST'])
+@login_required
 def upload_license():
-    if 'user_id' not in session or session['role'] != 'driver':
-        return redirect(url_for('login'))
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
     
     if request.method == 'POST':
         if 'license' not in request.files:
@@ -621,7 +1082,7 @@ def upload_license():
             return redirect(request.url)
         
         if file and allowed_file(file.filename):
-            filename = secure_filename(f"{session['username']}_{file.filename}")
+            filename = secure_filename(f"{current_user.username}_{file.filename}")
             if not os.path.exists(app.config['UPLOAD_FOLDER_LICENSE']):
                 os.makedirs(app.config['UPLOAD_FOLDER_LICENSE'])
             
@@ -630,7 +1091,7 @@ def upload_license():
             
             # Save to database
             license_entry = DriverLicense(
-                driver_username=session['username'],
+                driver_username=current_user.username,
                 file_path=file_path
             )
             db.session.add(license_entry)
@@ -642,133 +1103,158 @@ def upload_license():
         flash('Invalid file type. Allowed types: PDF, PNG, JPG, JPEG', 'danger')
         return redirect(request.url)
     
-    
     return render_template('upload_license.html')
 
 # Shift Management Routes
 @app.route('/request-shift-swap', methods=['GET', 'POST'])
+@login_required
 def request_shift_swap():
-    if 'user_id' not in session or session['role'] != 'driver':
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        schedule_id = request.form.get('schedule_id')
-        reason = request.form.get('reason')
-        target_driver = request.form.get('target_driver')
+    if request.method == 'GET':
+        # Get current driver's shifts
+        your_shifts = Schedule.query.filter_by(assigned_driver=current_user.username).all()
         
-        # Create shift swap request
-        swap_request = ShiftSwap(
-            requesting_driver=session['username'],
-            target_driver=target_driver,
-            schedule_id=schedule_id,
-            reason=reason
-        )
+        # Get all available drivers except current user
+        available_drivers = User.query.filter(
+            User.username != current_user.username,
+            User.role == 'driver'
+        ).all()
+        
+        return render_template('request_shift_swap.html',
+                             your_shifts=your_shifts,
+                             available_drivers=available_drivers,
+                             today=date.today())
+    
+    # Handle POST request
+    swap_date = request.form.get('swap_date')
+    your_shift_id = request.form.get('your_shift')
+    target_shift_id = request.form.get('target_shift')
+    target_driver = request.form.get('target_driver')
+    reason = request.form.get('reason')
+    
+    if not all([swap_date, your_shift_id, target_shift_id, target_driver, reason]):
+        flash('All fields are required', 'danger')
+        return redirect(url_for('request_shift_swap'))
+    
+    # Create new shift swap request
+    swap_request = ShiftSwap(
+        requesting_driver=current_user.username,
+        target_driver=target_driver,
+        schedule_id=your_shift_id,
+        reason=reason,
+        status='pending'
+    )
+    
+    try:
         db.session.add(swap_request)
         db.session.commit()
-        
-        # Create notification for target driver
-        notification = Notification(
-            recipient_username=target_driver,
-            title='New Shift Swap Request',
-            message=f'Driver {session["username"]} has requested to swap their shift with you.',
-            notification_type='schedule_update',
-            priority='normal'
-        )
-        db.session.add(notification)
-        db.session.commit()
-        
-        flash('Shift swap request submitted successfully!', 'success')
+        flash('Shift swap request submitted successfully', 'success')
         return redirect(url_for('driver_dashboard'))
-    
-    # Get available drivers and schedules for the form
-    available_drivers = User.query.filter_by(role='driver').filter(User.username != session['username']).all()
-    driver_schedules = Schedule.query.filter_by(assigned_driver=session['username']).all()
-    
-    return render_template('request_shift_swap.html', 
-                         available_drivers=available_drivers,
-                         schedules=driver_schedules)
+    except Exception as e:
+        db.session.rollback()
+        flash('An error occurred while submitting your request', 'danger')
+        return redirect(url_for('request_shift_swap'))
 
-@app.route('/manage-shift-swaps')
-def manage_shift_swaps():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
+@app.route('/api/driver-shifts')
+@login_required
+def get_driver_shifts():
+    date_str = request.args.get('date')
+    driver = request.args.get('driver')
     
-    swap_requests = ShiftSwap.query.order_by(ShiftSwap.created_at.desc()).all()
-    return render_template('manage_shift_swaps.html', swap_requests=swap_requests)
-
-@app.route('/handle-shift-swap/<int:id>/<string:action>', methods=['POST'])
-def handle_shift_swap(id, action):
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
+    if not date_str or not driver:
+        return jsonify([])
     
-    swap_request = ShiftSwap.query.get_or_404(id)
-    response = request.form.get('response', '')
-    
-    if action in ['approve', 'reject']:
-        if action == 'approve':
-            # Update schedule assignment
-            schedule = Schedule.query.get(swap_request.schedule_id)
-            old_driver = schedule.assigned_driver
-            schedule.assigned_driver = swap_request.target_driver
-            
-            # Create notifications for both drivers
-            notification1 = Notification(
-                recipient_username=swap_request.requesting_driver,
-                title='Shift Swap Approved',
-                message=f'Your shift swap request has been approved.',
-                notification_type='schedule_update',
-                priority='high'
-            )
-            notification2 = Notification(
-                recipient_username=swap_request.target_driver,
-                title='Shift Swap Approved',
-                message=f'You have been assigned to a new shift through a swap.',
-                notification_type='schedule_update',
-                priority='high'
-            )
-            db.session.add(notification1)
-            db.session.add(notification2)
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        shifts = Schedule.query.filter_by(
+            driver_username=driver,
+            date=target_date
+        ).all()
         
-        swap_request.status = 'approved' if action == 'approve' else 'rejected'
-        swap_request.admin_response = response
-        swap_request.response_time = datetime.utcnow()
-        db.session.commit()
-        
-        flash(f'Shift swap request {action}d successfully!', 'success')
-    
-    return redirect(url_for('manage_shift_swaps'))
+        return jsonify([{
+            'id': shift.id,
+            'route_name': shift.route_name,
+            'start_time': shift.start_time.strftime('%H:%M'),
+            'end_time': shift.end_time.strftime('%H:%M')
+        } for shift in shifts])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 # Break Period Management Routes
 @app.route('/manage-breaks', methods=['GET', 'POST'])
+@login_required
 def manage_breaks():
-    if 'user_id' not in session or session['role'] != 'driver':
-        return redirect(url_for('login'))
+    if current_user.role != 'admin':
+        flash('Access denied. Admin only.', 'danger')
+        return redirect(url_for('driver_dashboard'))
     
     if request.method == 'POST':
-        schedule_id = request.form.get('schedule_id')
-        break_type = request.form.get('break_type')
-        start_time = datetime.strptime(request.form.get('start_time'), '%Y-%m-%d %H:%M')
-        
-        # Create break period
-        break_period = BreakPeriod(
-            driver_username=session['username'],
-            schedule_id=schedule_id,
-            start_time=start_time,
-            break_type=break_type
-        )
-        db.session.add(break_period)
-        db.session.commit()
-        
-        flash('Break period scheduled successfully!', 'success')
-        return redirect(url_for('manage_breaks'))
+        try:
+            driver_username = request.form['driver']
+            break_date = datetime.strptime(request.form['date'], '%Y-%m-%d').date()
+            start_time_str = request.form['start_time']
+            end_time_str = request.form['end_time']
+            reason = request.form['reason']
+            
+            # Combine date and time for start and end times
+            start_time = datetime.combine(break_date, datetime.strptime(start_time_str, '%H:%M').time())
+            end_time = datetime.combine(break_date, datetime.strptime(end_time_str, '%H:%M').time())
+            
+            # Check if driver exists
+            driver = User.query.filter_by(username=driver_username, role='driver').first()
+            if not driver:
+                flash('Driver not found.', 'danger')
+                return redirect(url_for('manage_breaks'))
+            
+            # Check if break time conflicts with schedule
+            schedule = Schedule.query.filter_by(
+                assigned_driver=driver_username,
+                date=break_date
+            ).first()
+            
+            if schedule:
+                schedule_start = datetime.combine(break_date, datetime.strptime(schedule.start_time, '%H:%M').time())
+                schedule_end = datetime.combine(break_date, datetime.strptime(schedule.end_time, '%H:%M').time())
+                
+                if (start_time < schedule_end and end_time > schedule_start):
+                    flash('Break time conflicts with driver\'s schedule.', 'danger')
+                    return redirect(url_for('manage_breaks'))
+            
+            # Create new break record
+            new_break = BreakPeriod(
+                driver_username=driver_username,
+                schedule_id=schedule.id if schedule else None,
+                start_time=start_time,
+                end_time=end_time,
+                break_type='rest',  # Default to rest break
+                status='scheduled'
+            )
+            
+            db.session.add(new_break)
+            db.session.commit()
+            
+            # Create notification for driver
+            notification = Notification(
+                recipient_username=driver_username,
+                title='Break Scheduled',
+                message=f'Your break has been scheduled for {break_date} from {start_time_str} to {end_time_str}',
+                notification_type='break',
+                priority='normal'
+            )
+            db.session.add(notification)
+            db.session.commit()
+            
+            flash('Break scheduled successfully.', 'success')
+            return redirect(url_for('manage_breaks'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error scheduling break: {str(e)}', 'danger')
+            return redirect(url_for('manage_breaks'))
     
-    # Get driver's schedules and existing breaks
-    schedules = Schedule.query.filter_by(assigned_driver=session['username']).all()
-    breaks = BreakPeriod.query.filter_by(driver_username=session['username']).all()
-    
-    return render_template('manage_breaks.html', 
-                         schedules=schedules,
-                         breaks=breaks)
+    # GET request - show break management page
+    drivers = User.query.filter_by(role='driver').all()
+    breaks = BreakPeriod.query.order_by(BreakPeriod.start_time.desc()).all()
+    return render_template('manage_breaks.html', drivers=drivers, breaks=breaks, today=date.today())
 
 @app.route('/start-break/<int:break_id>')
 def start_break(break_id):
@@ -997,11 +1483,15 @@ def get_pending_notifications(username):
 
 # Manage Licenses
 @app.route('/manage-licenses')
+@login_required
 def manage_licenses():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
     
-    licenses = DriverLicense.query.all()
+    # Get all licenses with driver information
+    licenses = DriverLicense.query.order_by(DriverLicense.upload_date.desc()).all()
+    
     return render_template('manage_licenses.html', licenses=licenses)
 
 # View Performance Metrics
@@ -1016,19 +1506,6 @@ def view_performance():
         metrics = PerformanceMetric.query.filter_by(driver_username=session['username']).all()
     
     return render_template('view_performance.html', metrics=metrics)
-
-# View Attendance Record
-@app.route('/view_attendance')
-def view_attendance():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    if session['role'] == 'admin':
-        attendance = Attendance.query.all()
-    else:
-        attendance = Attendance.query.filter_by(driver_username=session['username']).all()
-    
-    return render_template('view_attendance.html', attendance=attendance)
 
 # Bus Assignment Management Routes
 @app.route('/manage_assignments')
@@ -1061,7 +1538,7 @@ def assign_schedule():
         return redirect(url_for('login'))
     
     driver_id = request.form.get('driver_id')
-    schedule_date = request.form.get('schedule_date')
+    schedule_date = datetime.strptime(request.form.get('schedule_date'), '%Y-%m-%d').date()
     start_time = request.form.get('start_time')
     end_time = request.form.get('end_time')
     bus_number = request.form.get('bus_number')
@@ -1072,17 +1549,18 @@ def assign_schedule():
         flash('Invalid driver selected.', 'danger')
         return redirect(url_for('manage_assignments'))
     
-    # Check for leave conflicts
+    # Check for leave conflicts - only for approved leaves on the specific date
     leave_conflict = LeaveRequest.query.filter(
         LeaveRequest.driver_username == driver.username,
         LeaveRequest.status == 'approved',
-        LeaveRequest.start_date <= schedule_date,
-        LeaveRequest.end_date >= schedule_date
+        LeaveRequest.date == schedule_date.strftime('%Y-%m-%d')
     ).first()
     
     if leave_conflict:
-        flash('Driver is on approved leave for the selected date.', 'danger')
-        return redirect(url_for('manage_assignments'))
+        return jsonify({
+            'status': 'error',
+            'message': f'Driver has approved leave on {schedule_date.strftime("%Y-%m-%d")}'
+        }), 400
     
     # Check for schedule conflicts
     schedule_conflict = BusAssignment.query.filter(
@@ -1095,8 +1573,10 @@ def assign_schedule():
     ).first()
     
     if schedule_conflict:
-        flash('Driver already has an assignment during this time period.', 'danger')
-        return redirect(url_for('manage_assignments'))
+        return jsonify({
+            'status': 'error',
+            'message': 'Driver already has an assignment during this time period.'
+        }), 400
     
     # Create new assignment
     assignment = BusAssignment(
@@ -1109,22 +1589,31 @@ def assign_schedule():
         status='scheduled'
     )
     
-    db.session.add(assignment)
-    db.session.commit()
-    
-    # Create notification for driver
-    notification = Notification(
-        recipient_username=driver.username,
-        title='New Bus Assignment',
-        message=f'You have been assigned bus {bus_number} on {schedule_date} from {start_time} to {end_time}.',
-        notification_type='schedule_update',
-        priority='high'
-    )
-    db.session.add(notification)
-    db.session.commit()
-    
-    flash('Bus assignment created successfully!', 'success')
-    return redirect(url_for('manage_assignments'))
+    try:
+        db.session.add(assignment)
+        db.session.commit()
+        
+        # Create notification for driver
+        notification = Notification(
+            recipient_username=driver.username,
+            title='New Bus Assignment',
+            message=f'You have been assigned bus {bus_number} on {schedule_date.strftime("%Y-%m-%d")} from {start_time} to {end_time}.',
+            notification_type='schedule_update',
+            priority='high'
+        )
+        db.session.add(notification)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Bus assignment created successfully!'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/edit-assignment/<int:id>', methods=['POST'])
 def edit_assignment(id):
@@ -1207,6 +1696,312 @@ def delete_assignment(id):
     
     flash('Bus assignment deleted successfully!', 'success')
     return redirect(url_for('manage_assignments'))
+
+@app.route('/api/available-drivers')
+@login_required
+def get_available_drivers():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    date = request.args.get('date')
+    start_time = request.args.get('start_time')
+    end_time = request.args.get('end_time')
+    
+    if not all([date, start_time, end_time]):
+        return jsonify({'error': 'Missing parameters'}), 400
+    
+    # Convert date string to date object
+    schedule_date = datetime.strptime(date, '%Y-%m-%d').date()
+    
+    # Get all drivers
+    all_drivers = User.query.filter_by(role='driver').all()
+    available_drivers = []
+    
+    for driver in all_drivers:
+        # Check for existing schedules
+        schedule_conflict = Schedule.query.filter(
+            Schedule.assigned_driver == driver.username,
+            Schedule.date == schedule_date,
+            Schedule.start_time <= end_time,
+            Schedule.end_time >= start_time
+        ).first()
+        
+        # Check for approved leaves
+        leave_conflict = LeaveRequest.query.filter(
+            LeaveRequest.driver_username == driver.username,
+            LeaveRequest.date == date,
+            LeaveRequest.status == 'approved',
+            LeaveRequest.start_time <= end_time,
+            LeaveRequest.end_time >= start_time
+        ).first()
+        
+        if not schedule_conflict and not leave_conflict:
+            available_drivers.append({
+                'username': driver.username,
+                'full_name': driver.full_name
+            })
+    
+    return jsonify({'drivers': available_drivers})
+
+@app.route('/api/schedule/<int:id>')
+@login_required
+def get_schedule(id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    schedule = Schedule.query.get_or_404(id)
+    return jsonify({
+        'id': schedule.id,
+        'date': schedule.date.strftime('%Y-%m-%d'),
+        'start_time': schedule.start_time.strftime('%H:%M'),
+        'end_time': schedule.end_time.strftime('%H:%M'),
+        'driver_username': schedule.assigned_driver,
+        'bus_number': schedule.bus_number,
+        'capacity': schedule.capacity,
+        'is_peak_hour': schedule.is_peak_hour
+    })
+
+@app.route('/manage-shift-swaps')
+@login_required
+def manage_shift_swaps():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    # Get all shift swap requests ordered by creation date
+    swap_requests = ShiftSwap.query.order_by(ShiftSwap.created_at.desc()).all()
+    return render_template('manage_shift_swaps.html', swap_requests=swap_requests)
+
+@app.route('/handle-shift-swap', methods=['POST'])
+@login_required
+def handle_shift_swap():
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'message': 'Access denied!'}), 403
+    
+    request_id = request.form.get('request_id')
+    action = request.form.get('action')
+    response = request.form.get('response', '')
+    
+    if not request_id or not action:
+        return jsonify({'success': False, 'message': 'Missing required parameters'}), 400
+    
+    swap_request = ShiftSwap.query.get_or_404(request_id)
+    
+    if swap_request.status != 'pending':
+        return jsonify({'success': False, 'message': 'This request has already been processed'}), 400
+    
+    try:
+        if action == 'approve':
+            # Swap the shifts
+            temp_driver = swap_request.your_shift.assigned_driver
+            swap_request.your_shift.assigned_driver = swap_request.target_shift.assigned_driver
+            swap_request.target_shift.assigned_driver = temp_driver
+            
+            swap_request.status = 'approved'
+            swap_request.admin_response = response
+            
+            # Create notifications for both drivers
+            notification1 = Notification(
+                recipient_username=swap_request.requesting_driver,
+                title='Shift Swap Approved',
+                message=f'Your shift swap request has been approved. {response}',
+                notification_type='shift_swap',
+                priority='normal'
+            )
+            
+            notification2 = Notification(
+                recipient_username=swap_request.target_driver,
+                title='Shift Swap Approved',
+                message=f'Your shift has been swapped with {swap_request.requesting_driver_rel.full_name}. {response}',
+                notification_type='shift_swap',
+                priority='normal'
+            )
+            
+            db.session.add(notification1)
+            db.session.add(notification2)
+            
+        elif action == 'reject':
+            swap_request.status = 'rejected'
+            swap_request.admin_response = response
+            
+            # Create notification for requesting driver
+            notification = Notification(
+                recipient_username=swap_request.requesting_driver,
+                title='Shift Swap Rejected',
+                message=f'Your shift swap request has been rejected. {response}',
+                notification_type='shift_swap',
+                priority='normal'
+            )
+            db.session.add(notification)
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Shift swap request processed successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/view-license')
+@login_required
+def view_license():
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    license = DriverLicense.query.filter_by(
+        driver_username=current_user.username
+    ).first()
+    
+    if license and license.file_path:
+        try:
+            return send_from_directory(
+                app.config['UPLOAD_FOLDER_LICENSE'],
+                os.path.basename(license.file_path),
+                as_attachment=True
+            )
+        except Exception as e:
+            flash(f'Error viewing license file: {str(e)}', 'danger')
+            return redirect(url_for('driver_dashboard'))
+    
+    flash('No license file found', 'warning')
+    return redirect(url_for('driver_dashboard'))
+
+@app.route('/edit-license', methods=['GET', 'POST'])
+@login_required
+def edit_license():
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    
+    license = DriverLicense.query.filter_by(
+        driver_username=current_user.username
+    ).first()
+    
+    if request.method == 'POST':
+        try:
+            if 'license' in request.files:
+                file = request.files['license']
+                if file and allowed_file(file.filename):
+                    filename = secure_filename(f"{current_user.username}_{file.filename}")
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER_LICENSE'], filename)
+                    file.save(file_path)
+                    
+                    # Get form data
+                    license_number = request.form.get('license_number')
+                    license_type = request.form.get('license_type')
+                    expiry_date = request.form.get('expiry_date')
+                    
+                    if license:
+                        # Update existing license
+                        license.file_path = file_path
+                        license.upload_date = datetime.utcnow()
+                        license.status = 'pending'
+                        license.license_number = license_number
+                        license.license_type = license_type
+                        if expiry_date:
+                            license.expiry_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                    else:
+                        # Create new license
+                        license = DriverLicense(
+                            driver_username=current_user.username,
+                            file_path=file_path,
+                            status='pending',
+                            license_number=license_number,
+                            license_type=license_type
+                        )
+                        if expiry_date:
+                            license.expiry_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                        db.session.add(license)
+                    
+                    db.session.commit()
+                    flash('License updated successfully!', 'success')
+                    return redirect(url_for('view_license'))
+                else:
+                    flash('Invalid file type. Allowed types: PDF, JPG, JPEG, PNG', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating license: {str(e)}', 'danger')
+    
+    return render_template('edit_license.html', license=license)
+
+@app.route('/approve-license/<int:id>')
+@login_required
+def approve_license(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    license = DriverLicense.query.get_or_404(id)
+    
+    try:
+        license.status = 'approved'
+        
+        # Create notification for the driver
+        notification = Notification(
+            recipient_username=license.driver_username,
+            title='License Approved',
+            message='Your driver license has been approved by the admin.',
+            notification_type='license',
+            priority='high'
+        )
+        db.session.add(notification)
+        
+        db.session.commit()
+        flash('License approved successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error approving license: {str(e)}', 'danger')
+    
+    return redirect(url_for('manage_licenses'))
+
+@app.route('/reject-license/<int:id>')
+@login_required
+def reject_license(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    license = DriverLicense.query.get_or_404(id)
+    
+    try:
+        license.status = 'rejected'
+        
+        # Create notification for the driver
+        notification = Notification(
+            recipient_username=license.driver_username,
+            title='License Rejected',
+            message='Your driver license has been rejected by the admin. Please upload a valid license.',
+            notification_type='license',
+            priority='high'
+        )
+        db.session.add(notification)
+        
+        db.session.commit()
+        flash('License rejected successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error rejecting license: {str(e)}', 'danger')
+    
+    return redirect(url_for('manage_licenses'))
+
+@app.route('/view-license/<int:id>')
+@login_required
+def view_license_file(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    license = DriverLicense.query.get_or_404(id)
+    
+    try:
+        return send_from_directory(
+            app.config['UPLOAD_FOLDER_LICENSE'],
+            os.path.basename(license.file_path),
+            as_attachment=True
+        )
+    except Exception as e:
+        flash(f'Error viewing license file: {str(e)}', 'danger')
+        return redirect(url_for('manage_licenses'))
 
 if __name__ == '__main__':
     app.run(debug=True)

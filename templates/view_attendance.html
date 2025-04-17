@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}View Attendance - Navis{% endblock %}
+
+{% block styles %}
+<style>
+    .attendance-container {
+        max-width: 1200px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .driver-select {
+        margin-bottom: 2rem;
+    }
+    .attendance-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+    }
+    .attendance-table th,
+    .attendance-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .attendance-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+    .status-present {
+        color: #28a745;
+    }
+    .status-absent {
+        color: #dc3545;
+    }
+    .status-late {
+        color: #ffc107;
+    }
+    .photo-preview {
+        max-width: 100px;
+        max-height: 100px;
+        cursor: pointer;
+    }
+    .modal-photo {
+        max-width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">View Attendance Records</h3>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+        <div class="card-body">
+            <form method="GET" class="mb-4">
+                <div class="row align-items-end">
+                    <div class="col-md-6">
+                        <label for="driver" class="form-label">Select Driver</label>
+                        <select name="driver" id="driver" class="form-select" onchange="this.form.submit()">
+                            <option value="">-- Select Driver --</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.username }}" {% if selected_driver == driver.username %}selected{% endif %}>
+                                {{ driver.full_name }} ({{ driver.username }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </form>
+
+            {% if selected_driver %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="px-4 py-3">Date</th>
+                            <th class="px-4 py-3">Check In</th>
+                            <th class="px-4 py-3">Check Out</th>
+                            <th class="px-4 py-3">Total Hours</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Check In Photo</th>
+                            <th class="px-4 py-3">Check Out Photo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in attendance_records %}
+                        <tr>
+                            <td class="px-4 py-3">{{ record.date.strftime('%Y-%m-%d') }}</td>
+                            <td class="px-4 py-3">{{ record.check_in_time.strftime('%H:%M') if record.check_in_time else 'Not Checked In' }}</td>
+                            <td class="px-4 py-3">{{ record.check_out_time.strftime('%H:%M') if record.check_out_time else 'Not Checked Out' }}</td>
+                            <td class="px-4 py-3">{{ '%.2f'|format(record.total_hours) if record.total_hours else '-' }}</td>
+                            <td class="px-4 py-3">
+                                <span class="badge bg-{{ 'success' if record.status == 'present' else 'warning' if record.status == 'late' else 'danger' }}">
+                                    {{ record.status.capitalize() }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                {% if record.check_in_photo %}
+                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#checkInPhoto{{ record.id }}">
+                                    <i class="fas fa-image"></i> View
+                                </button>
+                                {% else %}
+                                <span class="text-muted">No photo</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3">
+                                {% if record.check_out_photo %}
+                                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#checkOutPhoto{{ record.id }}">
+                                    <i class="fas fa-image"></i> View
+                                </button>
+                                {% else %}
+                                <span class="text-muted">No photo</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+
+                        <!-- Check In Photo Modal -->
+                        {% if record.check_in_photo %}
+                        <div class="modal fade" id="checkInPhoto{{ record.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Check In Photo - {{ record.date.strftime('%Y-%m-%d') }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body text-center">
+                                        <img src="data:image/jpeg;base64,{{ record.check_in_photo }}" class="img-fluid" alt="Check In Photo">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Check Out Photo Modal -->
+                        {% if record.check_out_photo %}
+                        <div class="modal fade" id="checkOutPhoto{{ record.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Check Out Photo - {{ record.date.strftime('%Y-%m-%d') }}</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body text-center">
+                                        <img src="data:image/jpeg;base64,{{ record.check_out_photo }}" class="img-fluid" alt="Check Out Photo">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">No attendance records found for this driver.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mt-4">
+                Please select a driver to view their attendance records.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .table th {
+        font-size: 1rem;
+        font-weight: 600;
+        background-color: #f8f9fa;
+    }
+    
+    .table td {
+        font-size: 0.95rem;
+        vertical-align: middle;
+    }
+    
+    .badge {
+        font-size: 0.85rem;
+        padding: 0.5em 0.8em;
+    }
+    
+    .form-label {
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    
+    .form-select {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+    }
+    
+    .card-header h3 {
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+    
+    .modal-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    
+    .btn {
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Handle photo preview in modal
+        $('.photo-preview').click(function() {
+            var photoSrc = $(this).data('photo');
+            $('#modalPhoto').attr('src', photoSrc);
+        });
+    });
+</script>
+{% endblock %} 

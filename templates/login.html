@@ -2,38 +2,91 @@
 
 {% block title %}Login - Navis{% endblock %}
 
+{% block styles %}
+<style>
+    .login-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .login-card {
+        width: 100%;
+        max-width: 400px;
+        padding: 2rem;
+    }
+    
+    .login-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    
+    .login-header h3 {
+        color: #0d6efd;
+        font-weight: 700;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #495057;
+    }
+    
+    .form-check-label {
+        color: #6c757d;
+    }
+    
+    .forgot-password {
+        text-align: center;
+        margin-top: 1rem;
+    }
+    
+    .forgot-password a {
+        color: #0d6efd;
+        text-decoration: none;
+    }
+    
+    .forgot-password a:hover {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6 col-lg-4">
-        <div class="card shadow">
-            <div class="card-body p-4">
-                <div class="text-center mb-4">
-                    <h2 class="mb-1">Welcome to Navis</h2>
-                    <p class="text-muted">"Seamless Travel, Smarter Scheduling!"</p>
-                </div>
+        <div class="card">
+            <div class="card-header text-center">
+                <h3 class="mb-0">Welcome to Navis</h3>
+                <br>
+                <p class="mb-0">"Seamless Travel"</p>
+            </div>
+            <div class="card-body">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
                 <form method="POST" action="{{ url_for('login') }}">
                     <div class="mb-3">
-                        <label for="username" class="form-label">User ID:</label>
+                        <label for="username" class="form-label">Username</label>
                         <input type="text" class="form-control" id="username" name="username" required>
                     </div>
                     <div class="mb-3">
-                        <label for="password" class="form-label">Password:</label>
+                        <label for="password" class="form-label">Password</label>
                         <input type="password" class="form-control" id="password" name="password" required>
                     </div>
-                    <div class="mb-3">
-                        <label for="role" class="form-label">Role:</label>
-                        <select class="form-select" id="role" name="role" required>
-                            <option value="admin">Admin</option>
-                            <option value="driver">Driver</option>
-                        </select>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sign-in-alt me-2"></i>Login
+                        </button>
                     </div>
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="remember" name="remember">
-                        <label class="form-check-label" for="remember">Remember Me</label>
-                        <a href="{{ url_for('forgot_password') }}" class="float-end text-decoration-none">Forgot Password?</a>
-                    </div>
-                    <button type="submit" class="btn btn-warning w-100">Login</button>
                 </form>
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('forgot_password') }}" class="text-muted">Forgot Password?</a>
+                </div>
             </div>
         </div>
     </div>

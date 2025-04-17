@@ -1,53 +1,113 @@
 {% extends "base.html" %}
 
+{% block title %}Request Shift Swap - Navis{% endblock %}
+
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Request Shift Swap</h2>
-        <a href="{{ url_for('driver_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
-    </div>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <div class="card">
-        <div class="card-body">
-            <form method="POST">
-                <div class="mb-3">
-                    <label for="schedule_id" class="form-label">Select Schedule to Swap</label>
-                    <select class="form-select" id="schedule_id" name="schedule_id" required>
-                        <option value="">Choose a schedule...</option>
-                        {% for schedule in schedules %}
-                            <option value="{{ schedule.id }}">
-                                {{ schedule.route }} ({{ schedule.start_time }} - {{ schedule.end_time }})
-                            </option>
-                        {% endfor %}
-                    </select>
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Request Shift Swap</h5>
+                    <a href="{{ url_for('driver_dashboard') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-arrow-left"></i> Back to Dashboard
+                    </a>
                 </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('request_shift_swap') }}">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="swap_date" class="form-label">Date to Swap</label>
+                                <input type="date" class="form-control" id="swap_date" name="swap_date" 
+                                       min="{{ today }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="target_driver" class="form-label">Swap With Driver</label>
+                                <select class="form-select" id="target_driver" name="target_driver" required>
+                                    <option value="">Select Driver</option>
+                                    {% for driver in available_drivers %}
+                                    <option value="{{ driver.username }}">{{ driver.full_name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
 
-                <div class="mb-3">
-                    <label for="target_driver" class="form-label">Select Driver to Swap With</label>
-                    <select class="form-select" id="target_driver" name="target_driver" required>
-                        <option value="">Choose a driver...</option>
-                        {% for driver in available_drivers %}
-                            <option value="{{ driver.username }}">{{ driver.full_name }}</option>
-                        {% endfor %}
-                    </select>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="your_shift" class="form-label">Your Shift</label>
+                                <select class="form-select" id="your_shift" name="your_shift" required>
+                                    <option value="">Select Your Shift</option>
+                                    {% for shift in your_shifts %}
+                                    <option value="{{ shift.id }}">
+                                        {{ shift.route_name }} ({{ shift.start_time.strftime('%I:%M %p') }} - {{ shift.end_time.strftime('%I:%M %p') }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="target_shift" class="form-label">Desired Shift</label>
+                                <select class="form-select" id="target_shift" name="target_shift" required disabled>
+                                    <option value="">Select Target Shift</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Reason for Swap</label>
+                            <textarea class="form-control" id="reason" name="reason" rows="3" required 
+                                    placeholder="Please provide a reason for requesting this shift swap"></textarea>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Submit Swap Request</button>
+                        </div>
+                    </form>
                 </div>
-
-                <div class="mb-3">
-                    <label for="reason" class="form-label">Reason for Swap</label>
-                    <textarea class="form-control" id="reason" name="reason" rows="3" required></textarea>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Submit Request</button>
-            </form>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const swapDate = document.getElementById('swap_date');
+    const targetDriver = document.getElementById('target_driver');
+    const targetShift = document.getElementById('target_shift');
+
+    function updateTargetShifts() {
+        if (swapDate.value && targetDriver.value) {
+            fetch(`/api/driver-shifts?date=${swapDate.value}&driver=${targetDriver.value}`)
+                .then(response => response.json())
+                .then(shifts => {
+                    targetShift.innerHTML = '<option value="">Select Target Shift</option>';
+                    shifts.forEach(shift => {
+                        targetShift.innerHTML += `
+                            <option value="${shift.id}">
+                                ${shift.route_name} (${formatTime(shift.start_time)} - ${formatTime(shift.end_time)})
+                            </option>
+                        `;
+                    });
+                    targetShift.disabled = false;
+                })
+                .catch(error => {
+                    console.error('Error fetching shifts:', error);
+                    targetShift.disabled = true;
+                });
+        } else {
+            targetShift.disabled = true;
+            targetShift.innerHTML = '<option value="">Select Target Shift</option>';
+        }
+    }
+
+    function formatTime(timeStr) {
+        const date = new Date(`2000-01-01T${timeStr}`);
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+
+    swapDate.addEventListener('change', updateTargetShifts);
+    targetDriver.addEventListener('change', updateTargetShifts);
+});
+</script>
 {% endblock %} 

@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}Mark Attendance - Navis{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Mark Attendance</h1>
+        <div>
+            <a href="{{ url_for('driver_dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Camera Feed and Controls -->
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-camera"></i> Camera Feed
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="camera-container mb-3">
+                        <video id="video" class="w-100" autoplay playsinline></video>
+                        <canvas id="canvas" style="display: none;"></canvas>
+                    </div>
+                    <div class="d-flex justify-content-center gap-2">
+                        <button id="startCamera" class="btn btn-primary">
+                            <i class="fas fa-video"></i> Start Camera
+                        </button>
+                        <button id="capturePhoto" class="btn btn-success" disabled>
+                            <i class="fas fa-camera"></i> Capture Photo
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Form -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-clock"></i> Attendance Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="attendanceForm" action="{{ url_for('mark_attendance') }}" method="POST">
+                        <input type="hidden" name="photo" id="photoData">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-calendar"></i> Date
+                            </label>
+                            <input type="text" class="form-control" value="{{ today.strftime('%Y-%m-%d') }}" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-user"></i> Driver
+                            </label>
+                            <input type="text" class="form-control" value="{{ current_user.full_name }}" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="far fa-clock"></i> Current Time
+                            </label>
+                            <input type="text" id="currentTime" class="form-control" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-tasks"></i> Action
+                            </label>
+                            <select class="form-select" name="action" required>
+                                <option value="">Select Action...</option>
+                                <option value="check_in">Check In</option>
+                                <option value="check_out">Check Out</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100" id="submitAttendance" disabled>
+                            <i class="fas fa-save"></i> Submit Attendance
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Today's Status -->
+            {% if today_attendance %}
+            <div class="card mt-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle"></i> Today's Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Check In:</strong> {{ today_attendance.check_in_time.strftime('%H:%M') if today_attendance.check_in_time }}</p>
+                    <p><strong>Check Out:</strong> {{ today_attendance.check_out_time.strftime('%H:%M') if today_attendance.check_out_time }}</p>
+                    <p><strong>Status:</strong> 
+                        <span class="badge bg-{{ 'success' if today_attendance.status == 'present' else 'warning' }}">
+                            {{ today_attendance.status|title }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const startButton = document.getElementById('startCamera');
+    const captureButton = document.getElementById('capturePhoto');
+    const submitButton = document.getElementById('submitAttendance');
+    const photoInput = document.getElementById('photoData');
+    let stream = null;
+
+    // Update current time
+    function updateCurrentTime() {
+        const now = new Date();
+        document.getElementById('currentTime').value = now.toLocaleTimeString();
+    }
+    setInterval(updateCurrentTime, 1000);
+    updateCurrentTime();
+
+    // Start camera
+    startButton.addEventListener('click', async function() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: 'user',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } 
+            });
+            video.srcObject = stream;
+            captureButton.disabled = false;
+            startButton.disabled = true;
+        } catch (err) {
+            console.error('Error accessing camera:', err);
+            alert('Error accessing camera. Please ensure camera permissions are granted.');
+        }
+    });
+
+    // Capture photo
+    captureButton.addEventListener('click', function() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        
+        // Convert to base64
+        const photoData = canvas.toDataURL('image/jpeg');
+        photoInput.value = photoData;
+        
+        // Enable submit button
+        submitButton.disabled = false;
+        
+        // Show preview
+        const img = document.createElement('img');
+        img.src = photoData;
+        img.className = 'img-fluid mt-3';
+        video.parentNode.appendChild(img);
+        
+        // Stop camera
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        video.style.display = 'none';
+        captureButton.disabled = true;
+    });
+
+    // Form validation
+    document.getElementById('attendanceForm').addEventListener('submit', function(e) {
+        if (!photoInput.value) {
+            e.preventDefault();
+            alert('Please capture a photo first');
+        }
+    });
+});
+</script>
+{% endblock %} 
