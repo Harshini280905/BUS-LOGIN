@@ -14,17 +14,17 @@
         transform: translateY(-5px);
     }
     .card-icon {
-        font-size: 3rem;
-        margin-bottom: 1.5rem;
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
         color: #1e88e5;
     }
     .stat-number {
-        font-size: 2.5rem;
+        font-size: 1.8rem;
         font-weight: bold;
         color: #0d47a1;
     }
     .stat-label {
-        font-size: 1.2rem;
+        font-size: 1rem;
         color: #333;
     }
     .action-card {
@@ -54,40 +54,16 @@
     .unread-notification {
         background: #e3f2fd;
     }
+    .stats-row {
+        margin-top: 1rem;
+    }
+    .stats-card {
+        padding: 1rem !important;
+        height: 100%;
+    }
 </style>
 
 <div class="container mt-4">
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card dashboard-card text-center p-4">
-                <i class="fas fa-users card-icon"></i>
-                <div class="stat-number">{{ total_drivers }}</div>
-                <div class="stat-label">Total Drivers</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card dashboard-card text-center p-4">
-                <i class="fas fa-calendar-times card-icon"></i>
-                <div class="stat-number">{{ pending_leaves }}</div>
-                <div class="stat-label">Pending Leaves</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card dashboard-card text-center p-4">
-                <i class="fas fa-bus card-icon"></i>
-                <div class="stat-number">{{ active_schedules }}</div>
-                <div class="stat-label">Active Schedules</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card dashboard-card text-center p-4">
-                <i class="fas fa-bell card-icon"></i>
-                <div class="stat-number">{{ unread_count }}</div>
-                <div class="stat-label">Unread Notifications</div>
-            </div>
-        </div>
-    </div>
-
     <div class="row">
         <div class="col-md-8">
             <div class="card mb-4">
@@ -133,18 +109,38 @@
                             </a>
                         </div>
                     </div>
+
+                    <div class="row stats-row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card dashboard-card text-center stats-card">
+                                <i class="fas fa-users card-icon"></i>
+                                <div class="stat-number">{{ total_drivers }}</div>
+                                <div class="stat-label">Total Drivers</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card dashboard-card text-center stats-card">
+                                <i class="fas fa-calendar-times card-icon"></i>
+                                <div class="stat-number">{{ pending_leaves }}</div>
+                                <div class="stat-label">Pending Leaves</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <div class="col-md-4">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h4 class="mb-0">Recent Notifications</h4>
+                    <a href="{{ url_for('notifications') }}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-bell"></i> View All
+                    </a>
                 </div>
                 <div class="card-body p-0">
                     {% if recent_notifications %}
-                        {% for notification in recent_notifications %}
+                        {% for notification in recent_notifications[:3] %}
                             <div class="p-3 border-bottom {% if not notification.is_read %}unread-notification{% endif %}">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
@@ -155,6 +151,13 @@
                                 </div>
                             </div>
                         {% endfor %}
+                        {% if recent_notifications|length > 3 %}
+                            <div class="p-3 text-center">
+                                <a href="{{ url_for('notifications') }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-ellipsis-h"></i> Show More
+                                </a>
+                            </div>
+                        {% endif %}
                     {% else %}
                         <div class="p-3 text-center">
                             <p class="mb-0">No recent notifications</p>

@@ -1,145 +1,184 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Profile - Bus Schedule System</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            min-height: 100vh;
-            background: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('/static/bus_interior.jpg');
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-            padding: 20px;
-        }
-        .container {
-            background-color: rgba(255, 255, 255, 0.9);
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.2);
-            max-width: 800px;
-            margin: 40px auto;
-        }
-        .profile-pic {
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-bottom: 20px;
-            border: 3px solid #007bff;
-        }
-        .profile-pic-container {
-            position: relative;
-            display: inline-block;
-        }
-        .edit-pic-btn {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            background: #007bff;
-            color: white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-        .btn-primary {
-            background-color: #007bff;
-            border-color: #007bff;
-        }
-        .btn-primary:hover {
-            background-color: #0056b3;
-            border-color: #0056b3;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="text-center mb-4">
-            <div class="profile-pic-container">
-                <img src="{{ url_for('static', filename='profile_pics/' + user.profile_pic) if user.profile_pic else url_for('static', filename='profile_pics/default.png') }}" 
-                     alt="Profile Picture" class="profile-pic" id="profilePic">
-                <label for="profilePicInput" class="edit-pic-btn">
-                    <i class="fas fa-camera"></i>
-                </label>
-            </div>
-            <h2 class="mt-3">{{ user.full_name }}</h2>
-            <p class="text-muted">{{ user.role.title() }}</p>
+{% extends "base.html" %}
+
+{% block title %}Profile - Navis{% endblock %}
+
+{% block content %}
+<style>
+    .profile-pic {
+        width: 150px;
+        height: 150px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-bottom: 20px;
+        border: 3px solid #007bff;
+    }
+    .profile-pic-container {
+        position: relative;
+        display: inline-block;
+    }
+    .edit-pic-btn {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        background: #007bff;
+        color: white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+    .btn-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+    .btn-primary:hover {
+        background-color: #0056b3;
+        border-color: #0056b3;
+    }
+    .license-section {
+        margin-top: 2rem;
+    }
+    .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        font-weight: 500;
+    }
+    .status-pending {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    .status-approved {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .status-rejected {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+</style>
+
+<div class="container">
+    <div class="text-center mb-4">
+        <div class="profile-pic-container">
+            <img src="{{ url_for('static', filename='profile_pics/' + user.profile_pic) if user.profile_pic else url_for('static', filename='profile_pics/default.png') }}" 
+                 alt="Profile Picture" class="profile-pic" id="profilePic">
+            <label for="profilePicInput" class="edit-pic-btn">
+                <i class="fas fa-camera"></i>
+            </label>
         </div>
-
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
-            <input type="file" id="profilePicInput" name="profile_pic" style="display: none;" accept="image/*">
-            
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="username" class="form-label">Username</label>
-                    <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly>
-                </div>
-                <div class="col-md-6">
-                    <label for="full_name" class="form-label">Full Name</label>
-                    <input type="text" class="form-control" id="full_name" name="full_name" value="{{ user.full_name }}" required>
-                </div>
-            </div>
-
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="email" class="form-label">Email</label>
-                    <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
-                </div>
-                <div class="col-md-6">
-                    <label for="phone" class="form-label">Phone</label>
-                    <input type="tel" class="form-control" id="phone" name="phone" value="{{ user.phone }}" required>
-                </div>
-            </div>
-
-            <div class="row mb-3">
-                <div class="col-md-6">
-                    <label for="dob" class="form-label">Date of Birth</label>
-                    <input type="date" class="form-control" id="dob" name="dob" value="{{ user.dob }}">
-                </div>
-                <div class="col-md-6">
-                    <label for="join_date" class="form-label">Join Date</label>
-                    <input type="text" class="form-control" id="join_date" value="{{ user.join_date.strftime('%Y-%m-%d') }}" readonly>
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <label for="address" class="form-label">Address</label>
-                <textarea class="form-control" id="address" name="address" rows="3">{{ user.address }}</textarea>
-            </div>
-
-            <div class="text-center mt-4">
-                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-            </div>
-        </form>
+        <h2 class="mt-3">{{ user.full_name }}</h2>
+        <p class="text-muted">{{ user.role.title() }}</p>
     </div>
 
-    <script src="https://kit.fontawesome.com/your-font-awesome-kit.js"></script>
-    <script>
-        document.getElementById('profilePicInput').onchange = function(e) {
-            if (e.target.files && e.target.files[0]) {
-                var reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById('profilePic').src = e.target.result;
-                }
-                reader.readAsDataURL(e.target.files[0]);
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('update_profile') }}" enctype="multipart/form-data">
+        <input type="file" id="profilePicInput" name="profile_pic" style="display: none;" accept="image/*">
+        
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly>
+            </div>
+            <div class="col-md-6">
+                <label for="full_name" class="form-label">Full Name</label>
+                <input type="text" class="form-control" id="full_name" name="full_name" value="{{ user.full_name }}" required>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+            </div>
+            <div class="col-md-6">
+                <label for="phone" class="form-label">Phone</label>
+                <input type="tel" class="form-control" id="phone" name="phone" value="{{ user.phone }}" required>
+            </div>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <label for="dob" class="form-label">Date of Birth</label>
+                <input type="date" class="form-control" id="dob" name="dob" value="{{ user.dob }}">
+            </div>
+            <div class="col-md-6">
+                <label for="join_date" class="form-label">Join Date</label>
+                <input type="text" class="form-control" id="join_date" value="{{ user.join_date.strftime('%Y-%m-%d') }}" readonly>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="address" class="form-label">Address</label>
+            <textarea class="form-control" id="address" name="address" rows="3">{{ user.address }}</textarea>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="{{ url_for('admin_dashboard') if user.role == 'admin' else url_for('driver_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+    </form>
+
+    {% if user.role == 'driver' %}
+    <div class="license-section">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">Driver License Information</h4>
+            </div>
+            <div class="card-body">
+                {% if license %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>License Number:</strong> {{ license.license_number }}</p>
+                            <p><strong>License Type:</strong> {{ license.license_type }}</p>
+                            <p><strong>Expiry Date:</strong> {{ license.expiry_date.strftime('%Y-%m-%d') }}</p>
+                            <p><strong>Status:</strong> 
+                                <span class="status-badge status-{{ license.status }}">
+                                    {{ license.status|title }}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <a href="{{ url_for('view_license') }}" class="btn btn-primary" target="_blank">
+                                <i class="fas fa-eye"></i> View License
+                            </a>
+                            <a href="{{ url_for('edit_license') }}" class="btn btn-secondary">
+                                <i class="fas fa-edit"></i> Edit License
+                            </a>
+                        </div>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No license information available.</p>
+                    <a href="{{ url_for('edit_license') }}" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Upload License
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('profilePicInput').onchange = function(e) {
+        if (e.target.files && e.target.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('profilePic').src = e.target.result;
             }
+            reader.readAsDataURL(e.target.files[0]);
         }
-    </script>
-</body>
-</html> 
+    }
+</script>
+{% endblock %} 

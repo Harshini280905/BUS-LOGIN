@@ -3,113 +3,153 @@
 {% block title %}Edit Schedule - Navis{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Edit Schedule</h1>
+        <div>
+            <a href="{{ url_for('manage_schedules') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Schedules
+            </a>
+        </div>
+    </div>
+
     <div class="card">
-        <div class="card-header">
-            <h3>Edit Schedule</h3>
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0"><i class="fas fa-edit"></i> Edit Schedule Details</h5>
         </div>
         <div class="card-body">
-            <form method="POST" class="needs-validation" novalidate>
+            <form method="POST">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="date" class="form-label">Date</label>
+                        <label for="date" class="form-label">
+                            <i class="far fa-calendar-alt"></i> Date
+                        </label>
                         <input type="date" class="form-control" id="date" name="date" 
-                               value="{{ schedule.date.strftime('%Y-%m-%d') }}" 
-                               min="{{ today.strftime('%Y-%m-%d') }}" required>
+                               value="{{ schedule.date.strftime('%Y-%m-%d') }}" required>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="driver" class="form-label">Driver</label>
-                        <select class="form-select" id="driver" name="driver" required>
-                            <option value="">Select Driver</option>
-                            {% for driver in drivers %}
-                            <option value="{{ driver.username }}" 
-                                    {% if driver.username == schedule.assigned_driver %}selected{% endif %}>
-                                {{ driver.full_name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="start_time" class="form-label">Start Time</label>
+                    
+                    <div class="col-md-3 mb-3">
+                        <label for="start_time" class="form-label">
+                            <i class="far fa-clock"></i> Start Time
+                        </label>
                         <input type="time" class="form-control" id="start_time" name="start_time" 
                                value="{{ schedule.start_time.strftime('%H:%M') }}" required>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="end_time" class="form-label">End Time</label>
+
+                    <div class="col-md-3 mb-3">
+                        <label for="end_time" class="form-label">
+                            <i class="far fa-clock"></i> End Time
+                        </label>
                         <input type="time" class="form-control" id="end_time" name="end_time" 
                                value="{{ schedule.end_time.strftime('%H:%M') }}" required>
                     </div>
                 </div>
+
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="route" class="form-label">Route</label>
-                        <input type="text" class="form-control" id="route" name="route" 
-                               value="{{ schedule.route }}" 
-                               placeholder="Enter route (e.g. City Center - Airport)" required>
+                        <label for="driver" class="form-label">
+                            <i class="fas fa-user"></i> Select Driver
+                        </label>
+                        <select class="form-select" id="driver" name="driver" required>
+                            <option value="">Choose a driver...</option>
+                            {% for driver in drivers %}
+                                <option value="{{ driver.username }}" 
+                                        {% if driver.username == schedule.assigned_driver %}selected{% endif %}>
+                                    {{ driver.full_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="bus_number" class="form-label">Bus Number</label>
+
+                    <div class="col-md-3 mb-3">
+                        <label for="bus_number" class="form-label">
+                            <i class="fas fa-bus"></i> Bus Number
+                        </label>
                         <input type="text" class="form-control" id="bus_number" name="bus_number" 
-                               value="{{ schedule.bus_number }}" 
-                               pattern="[A-Z0-9-]+" 
-                               title="Only uppercase letters, numbers, and hyphens allowed" required>
+                               value="{{ schedule.bus_number }}"
+                               pattern="[A-Z0-9-]+" title="Bus number can only contain uppercase letters, numbers, and hyphens"
+                               required>
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <label for="route" class="form-label">
+                            <i class="fas fa-route"></i> Route
+                        </label>
+                        <input type="text" class="form-control" id="route" name="route" 
+                               value="{{ schedule.route }}"
+                               placeholder="Enter route (e.g. City Center - Airport)"
+                               required>
+                    </div>
+
+                    <div class="col-md-3 mb-3">
+                        <label for="capacity" class="form-label">
+                            <i class="fas fa-users"></i> Capacity
+                        </label>
+                        <input type="number" class="form-control" id="capacity" name="capacity" 
+                               value="{{ schedule.capacity }}"
+                               min="1" max="100" required>
                     </div>
                 </div>
+
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="capacity" class="form-label">Capacity</label>
-                        <input type="number" class="form-control" id="capacity" name="capacity" 
-                               value="{{ schedule.capacity }}" min="1" max="100" required>
-                    </div>
-                    <div class="col-md-6 mb-3 d-flex align-items-end">
+                    <div class="col-12">
                         <div class="form-check">
                             <input type="checkbox" class="form-check-input" id="is_peak_hour" name="is_peak_hour"
                                    {% if schedule.is_peak_hour %}checked{% endif %}>
-                            <label class="form-check-label" for="is_peak_hour">Peak Hour Schedule</label>
+                            <label class="form-check-label" for="is_peak_hour">
+                                <i class="fas fa-star"></i> Peak Hour
+                            </label>
                         </div>
                     </div>
                 </div>
+
                 <div class="row mt-3">
                     <div class="col-12">
-                        <button type="submit" class="btn btn-primary">Update Schedule</button>
-                        <a href="{{ url_for('manage_schedules') }}" class="btn btn-secondary">Back</a>
-        </div>
-        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Update Schedule
+                        </button>
+                    </div>
+                </div>
             </form>
         </div>
-        </div>
-        </div>
+    </div>
+</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Form validation
-    const form = document.querySelector('.needs-validation');
-    form.addEventListener('submit', function(event) {
-        if (!form.checkValidity()) {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-        form.classList.add('was-validated');
-    });
-
     // Time validation
-    const startTime = document.getElementById('start_time');
-    const endTime = document.getElementById('end_time');
+    const startTimeInput = document.getElementById('start_time');
+    const endTimeInput = document.getElementById('end_time');
 
-    function validateTimes() {
-        if (startTime.value && endTime.value) {
-            if (endTime.value <= startTime.value) {
-                endTime.setCustomValidity('End time must be after start time');
-            } else {
-                endTime.setCustomValidity('');
+    endTimeInput.addEventListener('change', function() {
+        if (startTimeInput.value && endTimeInput.value) {
+            if (endTimeInput.value <= startTimeInput.value) {
+                alert('End time must be after start time');
+                endTimeInput.value = '';
             }
         }
-    }
+    });
 
-    startTime.addEventListener('change', validateTimes);
-    endTime.addEventListener('change', validateTimes);
+    // Form validation
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const busNumber = document.getElementById('bus_number').value;
+            const capacity = document.getElementById('capacity').value;
+            
+            if (!/^[A-Z0-9-]+$/.test(busNumber)) {
+                e.preventDefault();
+                alert('Bus number can only contain uppercase letters, numbers, and hyphens');
+                return;
+            }
+            
+            if (capacity < 1 || capacity > 100) {
+                e.preventDefault();
+                alert('Capacity must be between 1 and 100');
+                return;
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

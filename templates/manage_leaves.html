@@ -3,109 +3,108 @@
 {% block title %}Manage Leave Requests - Navis{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h3 class="mb-0">Manage Leave Requests</h3>
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Manage Leave Requests</h1>
+        <div>
             <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left"></i> Back to Dashboard
             </a>
         </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0"><i class="fas fa-calendar-times"></i> Leave Requests</h5>
+        </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-hover">
-                    <thead>
+                    <thead class="table-light">
                         <tr>
-                            <th>Driver Name</th>
-                            <th>Leave Date</th>
-                            <th>Start Time</th>
-                            <th>End Time</th>
-                            <th>Reason</th>
-                            <th>Status</th>
-                            <th>Actions</th>
+                            <th><i class="fas fa-user"></i> Driver</th>
+                            <th><i class="far fa-calendar-alt"></i> Date</th>
+                            <th><i class="far fa-clock"></i> Start Time</th>
+                            <th><i class="far fa-clock"></i> End Time</th>
+                            <th><i class="fas fa-info-circle"></i> Reason</th>
+                            <th><i class="fas fa-info-circle"></i> Status</th>
+                            <th><i class="fas fa-cogs"></i> Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for leave in leave_requests %}
-                        <tr>
-                            <td>{{ leave.driver_username }}</td>
-                            <td>{{ leave.date }}</td>
-                            <td>{{ leave.start_time }}</td>
-                            <td>{{ leave.end_time }}</td>
-                            <td>{{ leave.reason }}</td>
-                            <td>
-                                <span class="badge bg-{{ 'success' if leave.status == 'approved' else 'danger' if leave.status == 'rejected' else 'warning' }}">
-                                    {{ leave.status.capitalize() }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if leave.status == 'pending' %}
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#approveModal{{ leave.id }}">
-                                        <i class="fas fa-check"></i> Approve
-                                    </button>
-                                    <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#rejectModal{{ leave.id }}">
-                                        <i class="fas fa-times"></i> Reject
-                                    </button>
-                                </div>
-                                {% endif %}
-                            </td>
-                        </tr>
-
-                        <!-- Approve Modal -->
-                        <div class="modal fade" id="approveModal{{ leave.id }}" tabindex="-1">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title">Approve Leave Request</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        {% if leave_requests %}
+                            {% for request in leave_requests %}
+                            <tr>
+                                <td>{{ request.driver_username }}</td>
+                                <td>{{ request.date }}</td>
+                                <td>{{ request.start_time }}</td>
+                                <td>{{ request.end_time }}</td>
+                                <td>{{ request.reason }}</td>
+                                <td>
+                                    {% if request.status == 'approved' %}
+                                        <span class="badge bg-success"><i class="fas fa-check-circle"></i> Approved</span>
+                                    {% elif request.status == 'rejected' %}
+                                        <span class="badge bg-danger"><i class="fas fa-times-circle"></i> Rejected</span>
+                                    {% else %}
+                                        <span class="badge bg-warning"><i class="fas fa-clock"></i> Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if request.status == 'pending' %}
+                                    <div class="btn-group">
+                                        <form action="{{ url_for('handle_leave', id=request.id, action='approve') }}" method="POST" class="d-inline">
+                                            <input type="hidden" name="response" value="Your leave request has been approved.">
+                                            <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Are you sure you want to approve this leave request?')">
+                                                <i class="fas fa-check"></i> Approve
+                                            </button>
+                                        </form>
+                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal{{ request.id }}">
+                                            <i class="fas fa-times"></i> Reject
+                                        </button>
                                     </div>
-                                    <form action="{{ url_for('handle_leave', id=leave.id, action='approve') }}" method="POST">
-                                        <div class="modal-body">
-                                            <p>Are you sure you want to approve this leave request?</p>
-                                            <div class="mb-3">
-                                                <label for="approveResponse{{ leave.id }}" class="form-label">Response (Optional)</label>
-                                                <textarea class="form-control" id="approveResponse{{ leave.id }}" name="response" rows="3"></textarea>
+
+                                    <!-- Reject Modal -->
+                                    <div class="modal fade" id="rejectModal{{ request.id }}" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">Reject Leave Request</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <form action="{{ url_for('handle_leave', id=request.id, action='reject') }}" method="POST">
+                                                    <div class="modal-body">
+                                                        <div class="mb-3">
+                                                            <label for="response{{ request.id }}" class="form-label">Rejection Reason</label>
+                                                            <textarea class="form-control" id="response{{ request.id }}" name="response" rows="3" required></textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                        <button type="submit" class="btn btn-danger">Reject</button>
+                                                    </div>
+                                                </form>
                                             </div>
                                         </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button type="submit" class="btn btn-success">Approve</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Reject Modal -->
-                        <div class="modal fade" id="rejectModal{{ leave.id }}" tabindex="-1">
-                            <div class="modal-dialog">
-                                <div class="modal-content">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title">Reject Leave Request</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                     </div>
-                                    <form action="{{ url_for('handle_leave', id=leave.id, action='reject') }}" method="POST">
-                                        <div class="modal-body">
-                                            <p>Are you sure you want to reject this leave request?</p>
-                                            <div class="mb-3">
-                                                <label for="rejectResponse{{ leave.id }}" class="form-label">Reason for Rejection</label>
-                                                <textarea class="form-control" id="rejectResponse{{ leave.id }}" name="response" rows="3" required></textarea>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button type="submit" class="btn btn-danger">Reject</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
+                                    {% else %}
+                                        <span class="text-muted">No actions available</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
                         {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center">No leave requests found</td>
-                        </tr>
-                        {% endfor %}
+                            <tr>
+                                <td colspan="7" class="text-center">No leave requests found</td>
+                            </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>

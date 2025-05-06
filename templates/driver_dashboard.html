@@ -67,6 +67,133 @@
 </style>
 
 <div class="container mt-4">
+    <!-- Today's Schedule Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Today's Schedule</h4>
+        </div>
+        <div class="card-body">
+            {% if today_schedule %}
+                {% for schedule in today_schedule %}
+                    <div class="card schedule-card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="schedule-time">
+                                        {{ schedule.start_time.strftime('%H:%M') }} - {{ schedule.end_time.strftime('%H:%M') }}
+                                    </div>
+                                </div>
+                                <div class="col-md-9">
+                                    <div class="schedule-details">
+                                        <strong>Route:</strong> {{ schedule.route }}<br>
+                                        <strong>Bus Number:</strong> {{ schedule.bus_number }}<br>
+                                        <strong>Capacity:</strong> {{ schedule.capacity }}
+                                        {% if schedule.is_peak_hour %}
+                                            <span class="badge bg-warning text-dark">Peak Hour</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="text-center py-4">
+                    <h4>No schedules for today</h4>
+                    <p class="text-muted">You have no scheduled routes for today.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Actions Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Quick Actions</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <a href="{{ url_for('view_schedules') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                        <i class="bi bi-calendar-week action-icon"></i>
+                        View Schedules
+                    </a>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <a href="{{ url_for('apply_leave') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                        <i class="bi bi-calendar-plus action-icon"></i>
+                        Apply for Leave
+                    </a>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <a href="{{ url_for('mark_attendance') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                        <i class="bi bi-clipboard-check action-icon"></i>
+                        Mark Attendance
+                    </a>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <a href="{{ url_for('request_shift_swap') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                        <i class="bi bi-arrow-left-right action-icon"></i>
+                        Request Shift Swap
+                    </a>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <a href="{{ url_for('attendance_history') }}" class="card action-card text-white text-decoration-none p-3 text-center">
+                        <i class="bi bi-clock-history action-icon"></i>
+                        Attendance History
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shift Swap Requests Status -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Shift Swap Requests</h4>
+        </div>
+        <div class="card-body">
+            {% if shift_swaps %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Shift</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                                <th>Admin Response</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for swap in shift_swaps %}
+                                <tr>
+                                    <td>{{ swap.schedule.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {{ swap.schedule.route }}<br>
+                                        {{ swap.schedule.start_time.strftime('%H:%M') }} - {{ swap.schedule.end_time.strftime('%H:%M') }}
+                                    </td>
+                                    <td>{{ swap.swap.reason }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ 'warning' if swap.swap.status == 'pending' else 'success' if swap.swap.status == 'approved' else 'danger' }}">
+                                            {{ swap.swap.status|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ swap.swap.admin_response or 'No response yet' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted">No shift swap requests found.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="card dashboard-card text-center p-4">
@@ -91,133 +218,29 @@
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Today's Schedule</h4>
-                </div>
-                <div class="card-body">
-                    {% if today_schedule %}
-                        {% for schedule in today_schedule %}
-                            <div class="card schedule-card mb-3">
-                                <div class="card-body">
-                                    <div class="row">
-                                        <div class="col-md-3">
-                                            <div class="schedule-time">
-                                                {{ schedule.start_time.strftime('%H:%M') }} - {{ schedule.end_time.strftime('%H:%M') }}
-                                            </div>
-                                        </div>
-                                        <div class="col-md-9">
-                                            <div class="schedule-details">
-                                                <strong>Route:</strong> {{ schedule.route }}<br>
-                                                <strong>Bus Number:</strong> {{ schedule.bus_number }}<br>
-                                                <strong>Capacity:</strong> {{ schedule.capacity }}
-                                                {% if schedule.is_peak_hour %}
-                                                    <span class="badge bg-warning text-dark">Peak Hour</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+    <!-- Notifications Section -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Recent Notifications</h4>
+        </div>
+        <div class="card-body p-0">
+            {% if recent_notifications %}
+                {% for notification in recent_notifications %}
+                    <div class="p-3 border-bottom {% if not notification.is_read %}unread-notification{% endif %}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="mb-1">{{ notification.title }}</h6>
+                                <p class="mb-1">{{ notification.message }}</p>
                             </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="text-center py-4">
-                            <h4>No schedules for today</h4>
-                            <p class="text-muted">You have no scheduled routes for today.</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Quick Actions</h4>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('view_schedules') }}" class="card action-card text-white text-decoration-none p-3 text-center">
-                                <i class="bi bi-calendar-week action-icon"></i>
-                                View Schedules
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('apply_leave') }}" class="card action-card text-white text-decoration-none p-3 text-center">
-                                <i class="bi bi-calendar-plus action-icon"></i>
-                                Apply for Leave
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('view_license') }}" class="card action-card text-white text-decoration-none p-3 text-center">
-                                <i class="bi bi-file-earmark-text action-icon"></i>
-                                View License
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('mark_attendance') }}" class="card action-card text-white text-decoration-none p-3 text-center">
-                                <i class="bi bi-clipboard-check action-icon"></i>
-                                Mark Attendance
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('request_shift_swap') }}" class="card action-card text-white text-decoration-none p-3 text-center">
-                                <i class="bi bi-arrow-left-right action-icon"></i>
-                                Request Shift Swap
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('view_attendance') }}" class="card action-card text-white text-decoration-none p-3 text-center">
-                                <i class="bi bi-clock-history action-icon"></i>
-                                Attendance History
-                            </a>
+                            <small class="notification-time">{{ notification.created_at.strftime('%H:%M') }}</small>
                         </div>
                     </div>
+                {% endfor %}
+            {% else %}
+                <div class="p-3 text-center">
+                    <p class="mb-0">No recent notifications</p>
                 </div>
-            </div>
-        </div>
-
-        <div class="col-md-4">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Recent Notifications</h4>
-                </div>
-                <div class="card-body p-0">
-                    {% if recent_notifications %}
-                        {% for notification in recent_notifications %}
-                            <div class="p-3 border-bottom {% if not notification.is_read %}unread-notification{% endif %}">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <h6 class="mb-1">{{ notification.title }}</h6>
-                                        <p class="mb-1">{{ notification.message }}</p>
-                                    </div>
-                                    <small class="notification-time">{{ notification.created_at.strftime('%H:%M') }}</small>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="p-3 text-center">
-                            <p class="mb-0">No recent notifications</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-4 mb-4">
-            <div class="card h-100">
-                <div class="card-body text-center">
-                    <i class="fas fa-id-card card-icon text-primary mb-3"></i>
-                    <h5 class="card-title stat-label">License</h5>
-                    <p class="card-text stat-number">{{ 'Valid' if license and license.expiry_date > now else 'Expired' }}</p>
-                    <a href="{{ url_for('view_license') }}" class="btn btn-primary btn-lg">
-                        <i class="fas fa-eye action-icon"></i> View License
-                    </a>
-                </div>
-            </div>
+            {% endif %}
         </div>
     </div>
 </div>

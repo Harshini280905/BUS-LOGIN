@@ -22,39 +22,34 @@
                                     <th>Requesting Driver</th>
                                     <th>Target Driver</th>
                                     <th>Swap Date</th>
-                                    <th>Requested Shift</th>
-                                    <th>Target Shift</th>
+                                    <th>Schedule</th>
                                     <th>Reason</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for request in swap_requests %}
+                                {% for swap in swap_requests %}
                                 <tr>
-                                    <td>{{ request.requesting_driver_rel.full_name }}</td>
-                                    <td>{{ request.target_driver_rel.full_name }}</td>
-                                    <td>{{ request.swap_date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ swap.requesting_driver_rel.full_name }}</td>
+                                    <td>{{ swap.target_driver_rel.full_name if swap.target_driver_rel else 'Not specified' }}</td>
+                                    <td>{{ swap.schedule.date.strftime('%Y-%m-%d') }}</td>
                                     <td>
-                                        {{ request.your_shift.route }}<br>
-                                        {{ request.your_shift.start_time.strftime('%I:%M %p') }} - {{ request.your_shift.end_time.strftime('%I:%M %p') }}
+                                        {{ swap.schedule.route }}<br>
+                                        {{ swap.schedule.start_time.strftime('%I:%M %p') }} - {{ swap.schedule.end_time.strftime('%I:%M %p') }}
                                     </td>
+                                    <td>{{ swap.request.reason }}</td>
                                     <td>
-                                        {{ request.target_shift.route }}<br>
-                                        {{ request.target_shift.start_time.strftime('%I:%M %p') }} - {{ request.target_shift.end_time.strftime('%I:%M %p') }}
-                                    </td>
-                                    <td>{{ request.reason }}</td>
-                                    <td>
-                                        <span class="badge bg-{{ 'warning' if request.status == 'pending' else 'success' if request.status == 'approved' else 'danger' }}">
-                                            {{ request.status|title }}
+                                        <span class="badge bg-{{ 'warning' if swap.request.status == 'pending' else 'success' if swap.request.status == 'approved' else 'danger' }}">
+                                            {{ swap.request.status|title }}
                                         </span>
                                     </td>
                                     <td>
-                                        {% if request.status == 'pending' %}
-                                        <button class="btn btn-sm btn-success" onclick="handleSwapRequest({{ request.id }}, 'approve')">
+                                        {% if swap.request.status == 'pending' %}
+                                        <button type="button" class="btn btn-sm btn-success" onclick="openResponseModal('approve', {{ swap.request.id }})">
                                             <i class="fas fa-check"></i> Approve
                                         </button>
-                                        <button class="btn btn-sm btn-danger" onclick="handleSwapRequest({{ request.id }}, 'reject')">
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="openResponseModal('reject', {{ swap.request.id }})">
                                             <i class="fas fa-times"></i> Reject
                                         </button>
                                         {% endif %}
@@ -75,13 +70,13 @@
     </div>
 </div>
 
-<!-- Response Modal -->
-<div class="modal fade" id="responseModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Simple Response Modal -->
+<div class="modal" id="responseModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Add Response</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" onclick="closeModal()"></button>
             </div>
             <div class="modal-body">
                 <form id="responseForm">
@@ -89,13 +84,14 @@
                     <input type="hidden" id="action" name="action">
                     <div class="mb-3">
                         <label for="response" class="form-label">Response Message</label>
-                        <textarea class="form-control" id="response" name="response" rows="3"></textarea>
+                        <textarea class="form-control" id="response" name="response" rows="3" 
+                                placeholder="Enter your response message here..."></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="submitResponse()">Submit</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitForm()">Submit</button>
             </div>
         </div>
     </div>
@@ -104,15 +100,37 @@
 
 {% block scripts %}
 <script>
-function handleSwapRequest(requestId, action) {
+function openResponseModal(action, requestId) {
+    // Clear previous values
+    document.getElementById('response').value = '';
     document.getElementById('requestId').value = requestId;
     document.getElementById('action').value = action;
-    new bootstrap.Modal(document.getElementById('responseModal')).show();
+    
+    // Update modal title
+    const title = action === 'approve' ? 'Approve Shift Swap' : 'Reject Shift Swap';
+    document.querySelector('.modal-title').textContent = title;
+    
+    // Show modal
+    const modal = document.getElementById('responseModal');
+    modal.style.display = 'block';
+    
+    // Focus on textarea
+    document.getElementById('response').focus();
 }
 
-function submitResponse() {
-    const form = document.getElementById('responseForm');
-    const formData = new FormData(form);
+function closeModal() {
+    const modal = document.getElementById('responseModal');
+    modal.style.display = 'none';
+}
+
+function submitForm() {
+    const response = document.getElementById('response').value.trim();
+    if (!response) {
+        alert('Please enter a response message');
+        return;
+    }
+    
+    const formData = new FormData(document.getElementById('responseForm'));
     
     fetch('/handle-shift-swap', {
         method: 'POST',
@@ -121,6 +139,7 @@ function submitResponse() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            closeModal();
             location.reload();
         } else {
             alert('Error: ' + data.message);
@@ -131,5 +150,53 @@ function submitResponse() {
         alert('An error occurred while processing your request.');
     });
 }
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('responseModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
 </script>
+
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 1050;
+}
+
+.modal-dialog {
+    margin: 10% auto;
+    background: white;
+    border-radius: 5px;
+    width: 95%;
+    max-width: 500px;
+}
+
+.modal-content {
+    position: relative;
+    width: 100%;
+}
+
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+}
+
+textarea:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+</style>
 {% endblock %} 

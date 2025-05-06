@@ -117,6 +117,7 @@
                             <th><i class="far fa-calendar-alt"></i> Date</th>
                             <th><i class="fas fa-user"></i> Driver</th>
                             <th><i class="fas fa-bus"></i> Bus Number</th>
+                            <th><i class="fas fa-route"></i> Route</th>
                             <th><i class="far fa-clock"></i> Start Time</th>
                             <th><i class="far fa-clock"></i> End Time</th>
                             <th><i class="fas fa-users"></i> Capacity</th>
@@ -130,12 +131,12 @@
                             {% for schedule in schedules %}
                             <tr>
                                 <td>{{ schedule.date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ schedule.start_time }}</td>
-                                <td>{{ schedule.end_time }}</td>
-                                <td>{{ schedule.route }}</td>
-                                <td>{{ schedule.bus_number }}</td>
-                                <td>{{ schedule.capacity }}</td>
                                 <td>{{ schedule.assigned_driver }}</td>
+                                <td>{{ schedule.bus_number }}</td>
+                                <td>{{ schedule.route }}</td>
+                                <td>{{ schedule.start_time.strftime('%H:%M') }}</td>
+                                <td>{{ schedule.end_time.strftime('%H:%M') }}</td>
+                                <td>{{ schedule.capacity }}</td>
                                 <td>
                                     <span class="badge {% if schedule.is_peak_hour %}bg-warning{% else %}bg-info{% endif %}">
                                         {{ 'Peak Hour' if schedule.is_peak_hour else 'Regular' }}
@@ -152,11 +153,9 @@
                                 </td>
                                 <td>
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-primary edit-schedule" 
-                                                data-bs-toggle="modal" data-bs-target="#editScheduleModal"
-                                                data-schedule-id="{{ schedule.id }}">
+                                        <a href="{{ url_for('edit_schedule', id=schedule.id) }}" class="btn btn-sm btn-primary">
                                             <i class="fas fa-edit"></i>
-                                        </button>
+                                        </a>
                                         <button class="btn btn-sm btn-danger delete-schedule" 
                                                 data-schedule-id="{{ schedule.id }}"
                                                 onclick="confirmDelete({{ schedule.id }})">
@@ -168,7 +167,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="9" class="text-center">No schedules found</td>
+                                <td colspan="10" class="text-center">No schedules found</td>
                             </tr>
                         {% endif %}
                     </tbody>
