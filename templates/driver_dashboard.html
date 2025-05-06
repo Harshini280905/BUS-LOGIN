@@ -48,22 +48,6 @@
     .schedule-details {
         font-size: 1.1rem;
     }
-    .notification-card {
-        background: rgba(255, 255, 255, 0.95);
-        border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .notification-time {
-        font-size: 1rem;
-        color: #666;
-    }
-    .unread-notification {
-        background: #e3f2fd;
-    }
-    .btn-lg {
-        font-size: 1.2rem;
-        padding: 0.8rem 1.5rem;
-    }
 </style>
 
 <div class="container mt-4">
@@ -77,13 +61,13 @@
                 {% for schedule in today_schedule %}
                     <div class="card schedule-card mb-3">
                         <div class="card-body">
-                            <div class="row">
+                            <div class="row align-items-center">
                                 <div class="col-md-3">
                                     <div class="schedule-time">
                                         {{ schedule.start_time.strftime('%H:%M') }} - {{ schedule.end_time.strftime('%H:%M') }}
                                     </div>
                                 </div>
-                                <div class="col-md-9">
+                                <div class="col-md-6">
                                     <div class="schedule-details">
                                         <strong>Route:</strong> {{ schedule.route }}<br>
                                         <strong>Bus Number:</strong> {{ schedule.bus_number }}<br>
@@ -92,6 +76,22 @@
                                             <span class="badge bg-warning text-dark">Peak Hour</span>
                                         {% endif %}
                                     </div>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    {% if schedule.driver_acknowledged %}
+                                        <span class="badge bg-success p-2">
+                                            <i class="fas fa-check-circle"></i> Acknowledged
+                                            {% if schedule.acknowledgment_time %}
+                                                <small>({{ schedule.acknowledgment_time.strftime('%H:%M') }})</small>
+                                            {% endif %}
+                                        </span>
+                                    {% else %}
+                                        <form action="{{ url_for('acknowledge_schedule', id=schedule.id) }}" method="POST" style="display: inline;">
+                                            <button type="submit" class="btn btn-success">
+                                                <i class="fas fa-check-circle"></i> Acknowledge
+                                            </button>
+                                        </form>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -188,57 +188,6 @@
             {% else %}
                 <div class="text-center py-4">
                     <p class="text-muted">No shift swap requests found.</p>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Statistics Cards -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card dashboard-card text-center p-4">
-                <i class="bi bi-calendar-check card-icon"></i>
-                <div class="stat-number">{{ today_schedule|length if today_schedule else 0 }}</div>
-                <div class="stat-label">Today's Schedules</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card dashboard-card text-center p-4">
-                <i class="bi bi-calendar-x card-icon"></i>
-                <div class="stat-number">{{ upcoming_leaves|length if upcoming_leaves else 0 }}</div>
-                <div class="stat-label">Upcoming Leaves</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card dashboard-card text-center p-4">
-                <i class="bi bi-bell-fill card-icon"></i>
-                <div class="stat-number">{{ unread_count }}</div>
-                <div class="stat-label">Unread Notifications</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Notifications Section -->
-    <div class="card">
-        <div class="card-header bg-primary text-white">
-            <h4 class="mb-0">Recent Notifications</h4>
-        </div>
-        <div class="card-body p-0">
-            {% if recent_notifications %}
-                {% for notification in recent_notifications %}
-                    <div class="p-3 border-bottom {% if not notification.is_read %}unread-notification{% endif %}">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <h6 class="mb-1">{{ notification.title }}</h6>
-                                <p class="mb-1">{{ notification.message }}</p>
-                            </div>
-                            <small class="notification-time">{{ notification.created_at.strftime('%H:%M') }}</small>
-                        </div>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <div class="p-3 text-center">
-                    <p class="mb-0">No recent notifications</p>
                 </div>
             {% endif %}
         </div>

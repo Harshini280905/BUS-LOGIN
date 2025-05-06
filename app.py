@@ -202,91 +202,100 @@ with app.app_context():
         {
             'username': 'driver1',
             'password': 'driver123',
-            'name': 'John Smith',
+            'name': 'Sarvesh',
             'license_number': 'DL123456',
             'phone': '1234567890',
-            'email': 'john.smith@example.com',
+            'email': 'sarvesh@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver2',
             'password': 'driver123',
-            'name': 'Michael Johnson',
+            'name': 'Karthick',
             'license_number': 'DL789012',
             'phone': '9876543210',
-            'email': 'michael.j@example.com',
+            'email': 'karthick@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver3',
             'password': 'driver123',
-            'name': 'Robert Williams',
+            'name': 'Saravanan',
             'license_number': 'DL345678',
             'phone': '4567890123',
-            'email': 'robert.w@example.com',
+            'email': 'saravanan@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver4',
             'password': 'driver123',
-            'name': 'David Brown',
+            'name': 'Ram',
             'license_number': 'DL901234',
             'phone': '7890123456',
-            'email': 'david.b@example.com',
+            'email': 'ram@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver5',
             'password': 'driver123',
-            'name': 'James Davis',
+            'name': 'Arun',
             'license_number': 'DL567890',
             'phone': '2345678901',
-            'email': 'james.d@example.com',
+            'email': 'arun@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver6',
             'password': 'driver123',
-            'name': 'William Miller',
+            'name': 'Sankar',
             'license_number': 'DL123789',
             'phone': '8901234567',
-            'email': 'william.m@example.com',
+            'email': 'sankar@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver7',
             'password': 'driver123',
-            'name': 'Thomas Wilson',
+            'name': 'Santhosh',
             'license_number': 'DL456123',
             'phone': '3456789012',
-            'email': 'thomas.w@example.com',
+            'email': 'santhosh@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver8',
             'password': 'driver123',
-            'name': 'Charles Moore',
+            'name': 'Rajkumar',
             'license_number': 'DL789456',
             'phone': '6789012345',
-            'email': 'charles.m@example.com',
+            'email': 'rajkumar@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver9',
             'password': 'driver123',
-            'name': 'Joseph Taylor',
+            'name': 'Praveen',
             'license_number': 'DL234567',
             'phone': '9012345678',
-            'email': 'joseph.t@example.com',
+            'email': 'praveen@example.com',
             'role': 'driver'
         },
         {
             'username': 'driver10',
             'password': 'driver123',
-            'name': 'Daniel Anderson',
+            'name': 'Kishore',
             'license_number': 'DL890123',
             'phone': '5678901234',
-            'email': 'daniel.a@example.com',
+            'email': 'kishore@example.com',
+            'role': 'driver'
+        },
+        {
+            'username': 'driver11',
+            'password': 'driver123',
+            'name': 'Shiva',
+            'license_number': 'DL456789',
+            'phone': '2345678901',
+            'email': 'shiva@example.com',
             'role': 'driver'
         }
     ]
@@ -370,34 +379,44 @@ def check_leave_conflict(driver_username, date, start_time, end_time, exclude_id
     return False, None
 
 def check_route_conflict(route, start_time, end_time, exclude_id=None):
-    """Check if a route is already assigned to another driver at the same time on the same date"""
-    query = Schedule.query.filter_by(route=route)
-    if exclude_id:
-        query = query.filter(Schedule.id != exclude_id)
-    
-    schedules = query.all()
-    
+    """Check ONLY for driver conflicts (same driver on same date/time) and bus conflicts (same bus on same date/time)"""
     # Convert time strings to time objects if they're strings
     if isinstance(start_time, str):
         start_time_obj = datetime.strptime(start_time, '%H:%M').time()
+        start_date = None  # We'll get this from the schedule
     else:
         start_time_obj = start_time.time()
+        start_date = start_time.date()
     
     if isinstance(end_time, str):
         end_time_obj = datetime.strptime(end_time, '%H:%M').time()
     else:
         end_time_obj = end_time.time()
     
+    # Get all schedules
+    query = Schedule.query
+    if exclude_id:
+        query = query.filter(Schedule.id != exclude_id)
+    schedules = query.all()
+    
     for schedule in schedules:
-        # Only check for conflicts on the same date
-        if hasattr(start_time, 'date') and schedule.date != start_time.date():
+        # Skip if dates don't match
+        if start_date and schedule.date != start_date:
             continue
             
+        # Convert schedule times to time objects
         existing_start = schedule.start_time.time()
         existing_end = schedule.end_time.time()
         
+        # Check for time overlap only if dates match
         if (start_time_obj <= existing_end and end_time_obj >= existing_start):
-            return True, f"Route conflict: Route {route} is already assigned to driver {schedule.assigned_driver} from {existing_start.strftime('%H:%M')} to {existing_end.strftime('%H:%M')} on {schedule.date.strftime('%Y-%m-%d')}"
+            # Check if it's a driver conflict (same driver on same date/time)
+            if schedule.assigned_driver:
+                return True, f"Driver conflict: Driver {schedule.assigned_driver} is already assigned from {existing_start.strftime('%H:%M')} to {existing_end.strftime('%H:%M')} on {schedule.date.strftime('%Y-%m-%d')}"
+            
+            # Check if it's a bus conflict (same bus on same date/time)
+            if schedule.bus_number:
+                return True, f"Bus conflict: Bus {schedule.bus_number} is already assigned from {existing_start.strftime('%H:%M')} to {existing_end.strftime('%H:%M')} on {schedule.date.strftime('%Y-%m-%d')}"
     
     return False, None
 
@@ -502,11 +521,11 @@ def manage_schedules():
         flash('Access denied!', 'danger')
         return redirect(url_for('driver_dashboard'))
     
-    # Get all schedules with driver information
-    schedules = Schedule.query.order_by(Schedule.date.desc()).all()
-    
-    # Sort schedules by start_time after fetching
-    schedules.sort(key=lambda x: x.start_time.time() if isinstance(x.start_time, datetime) else datetime.strptime(x.start_time, '%H:%M').time())
+    # Get all schedules with driver information, ordered by date and time
+    schedules = Schedule.query.order_by(
+        Schedule.date.asc(),
+        Schedule.start_time.asc()
+    ).all()
     
     # Get all drivers for the form
     drivers = User.query.filter_by(role='driver').all()
@@ -552,8 +571,8 @@ def add_schedule():
                 flash(leave_message, 'danger')
                 return redirect(url_for('manage_schedules'))
             
-            # Check for route conflicts
-            has_route_conflict, route_message = check_route_conflict(route, start_time, end_time)
+            # Check for route conflicts - pass the full datetime objects
+            has_route_conflict, route_message = check_route_conflict(route, start_datetime, end_datetime)
             if has_route_conflict:
                 flash(route_message, 'danger')
                 return redirect(url_for('manage_schedules'))
@@ -624,7 +643,7 @@ def edit_schedule(id):
             end_datetime = datetime.combine(schedule_date, datetime.strptime(end_time, '%H:%M').time())
             
             # Check for schedule conflict (excluding current schedule)
-            has_conflict, message = check_schedule_conflict(driver, start_time, end_time, exclude_id=id)
+            has_conflict, message = check_schedule_conflict(driver, start_datetime, end_datetime, exclude_id=id)
             if has_conflict:
                 flash(message, 'danger')
                 return redirect(url_for('edit_schedule', id=id))
@@ -635,8 +654,8 @@ def edit_schedule(id):
                 flash(leave_message, 'danger')
                 return redirect(url_for('edit_schedule', id=id))
             
-            # Check for route conflicts (excluding current schedule)
-            has_route_conflict, route_message = check_route_conflict(route, start_time, end_time, exclude_id=id)
+            # Check for route conflicts (excluding current schedule) - pass the full datetime objects
+            has_route_conflict, route_message = check_route_conflict(route, start_datetime, end_datetime, exclude_id=id)
             if has_route_conflict:
                 flash(route_message, 'danger')
                 return redirect(url_for('edit_schedule', id=id))
@@ -822,8 +841,11 @@ def admin_dashboard():
     pending_leaves = LeaveRequest.query.filter_by(status='pending').count()
     active_schedules = Schedule.query.filter_by(status='active').count()
     
-    # Get the 3 most recent notifications
-    recent_notifications = Notification.query.order_by(Notification.created_at.desc()).limit(3).all()
+    # Get the 3 most recent notifications for admin (only shift swaps and leave requests)
+    recent_notifications = Notification.query.filter(
+        Notification.recipient_username == 'admin',
+        Notification.notification_type.in_(['shift_swap', 'leave_request'])
+    ).order_by(Notification.created_at.desc()).limit(3).all()
     
     return render_template('admin_dashboard.html',
                          total_drivers=total_drivers,
@@ -879,12 +901,18 @@ def driver_dashboard():
 @login_required
 def view_schedules():
     if current_user.role == 'admin':
-        schedules = Schedule.query.order_by(Schedule.date.desc()).all()
+        schedules = Schedule.query.order_by(
+            Schedule.date.asc(),
+            Schedule.start_time.asc()
+        ).all()
     else:
         # For drivers, only show their assigned schedules
         schedules = Schedule.query.filter_by(
             assigned_driver=current_user.username
-        ).order_by(Schedule.date.desc()).all()
+        ).order_by(
+            Schedule.date.asc(),
+            Schedule.start_time.asc()
+        ).all()
     
     return render_template('view_schedules.html', schedules=schedules)
 
@@ -1388,10 +1416,13 @@ def end_break(break_id):
 @login_required
 def notifications():
     if current_user.role == 'admin':
-        # For admin, show all notifications
-        notifications = Notification.query.order_by(Notification.created_at.desc()).all()
+        # For admin, show only shift swaps and leave requests
+        notifications = Notification.query.filter(
+            Notification.recipient_username == 'admin',
+            Notification.notification_type.in_(['shift_swap', 'leave_request'])
+        ).order_by(Notification.created_at.desc()).all()
     else:
-        # For drivers, only show their notifications
+        # For drivers, show all their notifications
         notifications = Notification.query.filter_by(
             recipient_username=current_user.username
         ).order_by(Notification.created_at.desc()).all()
@@ -2169,6 +2200,79 @@ def attendance_history():
     ).order_by(Attendance.date.desc()).all()
     
     return render_template('attendance_history.html', attendance_records=attendance_records)
+
+@app.route('/acknowledge-schedule/<int:id>', methods=['POST'])
+@login_required
+def acknowledge_schedule(id):
+    if current_user.role != 'driver':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    schedule = Schedule.query.get_or_404(id)
+    
+    if schedule.assigned_driver != current_user.username:
+        flash('You can only acknowledge your own schedules!', 'danger')
+        return redirect(url_for('view_schedules'))
+    
+    try:
+        schedule.driver_acknowledged = True
+        schedule.acknowledgment_time = datetime.utcnow()
+        schedule.status = 'acknowledged'
+        
+        # Create notification for admin
+        notification = Notification(
+            recipient_username='admin',
+            title='Schedule Acknowledged',
+            message=f'Driver {current_user.username} has acknowledged the schedule for {schedule.date} on route {schedule.route}.',
+            notification_type='schedule_update',
+            priority='normal'
+        )
+        db.session.add(notification)
+        
+        db.session.commit()
+        flash('Schedule acknowledged successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error acknowledging schedule: {str(e)}', 'danger')
+    
+    return redirect(url_for('view_schedules'))
+
+@app.route('/update-driver-names')
+@login_required
+def update_driver_names():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    # Dictionary mapping old usernames to new names
+    driver_updates = {
+        'driver1': 'Sarvesh',
+        'driver2': 'Karthick',
+        'driver3': 'Saravanan',
+        'driver4': 'Ram',
+        'driver5': 'Arun',
+        'driver6': 'Sankar',
+        'driver7': 'Santhosh',
+        'driver8': 'Rajkumar',
+        'driver9': 'Praveen',
+        'driver10': 'Kishore',
+        'driver11': 'Shiva'
+    }
+    
+    try:
+        for username, new_name in driver_updates.items():
+            driver = User.query.filter_by(username=username).first()
+            if driver:
+                driver.full_name = new_name
+                driver.email = f"{new_name.lower()}@example.com"
+        
+        db.session.commit()
+        flash('Driver names updated successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating driver names: {str(e)}', 'danger')
+    
+    return redirect(url_for('view_drivers'))
 
 if __name__ == '__main__':
     app.run(debug=True)

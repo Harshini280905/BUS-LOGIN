@@ -123,6 +123,7 @@
                             <th><i class="fas fa-users"></i> Capacity</th>
                             <th><i class="fas fa-star"></i> Peak Hour</th>
                             <th><i class="fas fa-info-circle"></i> Status</th>
+                            <th><i class="fas fa-check-circle"></i> Acknowledgment</th>
                             <th><i class="fas fa-cogs"></i> Actions</th>
                         </tr>
                     </thead>
@@ -152,6 +153,18 @@
                                     {% endif %}
                                 </td>
                                 <td>
+                                    {% if schedule.driver_acknowledged %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-check-circle"></i> Acknowledged
+                                        {% if schedule.acknowledgment_time %}
+                                        <small>({{ schedule.acknowledgment_time.strftime('%H:%M') }})</small>
+                                        {% endif %}
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>
                                     <div class="btn-group">
                                         <a href="{{ url_for('edit_schedule', id=schedule.id) }}" class="btn btn-sm btn-primary">
                                             <i class="fas fa-edit"></i>
@@ -167,7 +180,7 @@
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="10" class="text-center">No schedules found</td>
+                                <td colspan="11" class="text-center">No schedules found</td>
                             </tr>
                         {% endif %}
                     </tbody>
