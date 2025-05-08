@@ -33,10 +33,20 @@
                                 <tr>
                                     <td>{{ swap.requesting_driver_rel.full_name }}</td>
                                     <td>{{ swap.target_driver_rel.full_name if swap.target_driver_rel else 'Not specified' }}</td>
-                                    <td>{{ swap.schedule.date.strftime('%Y-%m-%d') }}</td>
                                     <td>
-                                        {{ swap.schedule.route }}<br>
-                                        {{ swap.schedule.start_time.strftime('%I:%M %p') }} - {{ swap.schedule.end_time.strftime('%I:%M %p') }}
+                                        {% if swap.schedule %}
+                                            {{ swap.schedule.date.strftime('%Y-%m-%d') }}
+                                        {% else %}
+                                            <span class="text-danger">Schedule missing</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if swap.schedule %}
+                                            {{ swap.schedule.route }}<br>
+                                            {{ swap.schedule.start_time.strftime('%I:%M %p') }} - {{ swap.schedule.end_time.strftime('%I:%M %p') }}
+                                        {% else %}
+                                            <span class="text-danger">N/A</span>
+                                        {% endif %}
                                     </td>
                                     <td>{{ swap.request.reason }}</td>
                                     <td>

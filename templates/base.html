@@ -72,6 +72,16 @@
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
         }
+        /* Make only headings outside of .card white for visibility on dark background */
+        body h1:not(.card h1),
+        body h2:not(.card h2),
+        body h3:not(.card h3),
+        body h4:not(.card h4),
+        body h5:not(.card h5),
+        body h6:not(.card h6) {
+            color: #fff !important;
+            text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
+        }
     </style>
 </head>
 <body>
