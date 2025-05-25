@@ -61,10 +61,39 @@
         padding: 1rem !important;
         height: 100%;
     }
+    .report-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    .report-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .report-icon {
+        font-size: 2.5rem;
+        color: #1e88e5;
+        margin-bottom: 1rem;
+    }
+    .report-title {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 0.5rem;
+    }
+    .report-description {
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
 </style>
 
-<div class="container mt-4">
+<div class="container-fluid">
     <div class="row">
+        <!-- Quick Actions - Left Side -->
         <div class="col-md-8">
             <div class="card mb-4">
                 <div class="card-header">
@@ -72,40 +101,40 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <a href="{{ url_for('manage_schedules') }}" class="card action-card text-decoration-none p-3">
                                 <i class="fas fa-calendar-alt action-icon"></i>
                                 Manage Schedules
                             </a>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <a href="{{ url_for('manage_leaves') }}" class="card action-card text-decoration-none p-3">
                                 <i class="fas fa-calendar-times action-icon"></i>
                                 Manage Leaves
                             </a>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <a href="{{ url_for('view_drivers') }}" class="card action-card text-decoration-none p-3">
                                 <i class="fas fa-users action-icon"></i>
                                 View Drivers
                             </a>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('manage_licenses') }}" class="card action-card text-decoration-none p-3">
-                                <i class="fas fa-id-card action-icon"></i>
-                                Manage Licenses
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <a href="{{ url_for('view_attendance') }}" class="card action-card text-decoration-none p-3">
                                 <i class="fas fa-clipboard-check action-icon"></i>
                                 View Attendance
                             </a>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <a href="{{ url_for('manage_shift_swaps') }}" class="card action-card text-decoration-none p-3">
                                 <i class="fas fa-exchange-alt action-icon"></i>
                                 Manage Shift Swaps
+                            </a>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <a href="{{ url_for('manage_licenses') }}" class="card action-card text-decoration-none p-3">
+                                <i class="fas fa-id-card action-icon"></i>
+                                Manage Licenses
                             </a>
                         </div>
                     </div>
@@ -128,76 +157,72 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-md-4">
+            <!-- Reports & Analytics Section -->
             <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4 class="mb-0">Recent Notifications</h4>
-                    <a href="{{ url_for('notifications') }}" class="btn btn-sm btn-primary">
-                        <i class="fas fa-bell"></i> View All
-                    </a>
+                <div class="card-header">
+                    <h4 class="mb-0">Reports & Analytics</h4>
                 </div>
-                <div class="card-body p-0">
-                    {% if recent_notifications %}
-                        {% for notification in recent_notifications[:3] %}
-                            <div class="p-3 border-bottom {% if not notification.is_read %}unread-notification{% endif %}">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div>
-                                        <h6 class="mb-1">{{ notification.title }}</h6>
-                                        <p class="mb-1">{{ notification.message }}</p>
-                                    </div>
-                                    <small class="notification-time">{{ notification.created_at.strftime('%H:%M') }}</small>
-                                </div>
-                            </div>
-                        {% endfor %}
-                        {% if recent_notifications|length > 3 %}
-                            <div class="p-3 text-center">
-                                <a href="{{ url_for('notifications') }}" class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-ellipsis-h"></i> Show More
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="report-card">
+                                <i class="fas fa-chart-line report-icon"></i>
+                                <div class="report-title">Performance Reports</div>
+                                <div class="report-description">Track driver performance metrics including attendance, punctuality, and service quality.</div>
+                                <a href="{{ url_for('performance_reports') }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye mr-2"></i>View Reports
                                 </a>
                             </div>
-                        {% endif %}
-                    {% else %}
-                        <div class="p-3 text-center">
-                            <p class="mb-0">No recent notifications</p>
                         </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="report-card">
+                                <i class="fas fa-exclamation-triangle report-icon"></i>
+                                <div class="report-title">Incident Reports</div>
+                                <div class="report-description">Record and analyze driver incidents, accidents, and service disruptions.</div>
+                                <a href="{{ url_for('incident_reports') }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-plus mr-2"></i>Add Report
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="report-card">
+                                <i class="fas fa-bus report-icon"></i>
+                                <div class="report-title">Bus Management</div>
+                                <div class="report-description">Analyze bus capacity and route efficiency to optimize fleet management.</div>
+                                <a href="{{ url_for('bus_management_reports') }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-chart-bar mr-2"></i>View Analysis
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Notifications - Right Side -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Recent Notifications</h4>
+                </div>
+                <div class="card-body">
+                    {% if recent_notifications %}
+                        {% for notification in recent_notifications %}
+                            <div class="notification-card p-3 mb-2 {% if not notification.is_read %}unread-notification{% endif %}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-1">{{ notification.title }}</h5>
+                                    <small class="notification-time">{{ notification.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                </div>
+                                <p class="mb-0">{{ notification.message }}</p>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">No recent notifications</p>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block head %}
-<style>
-.card {
-    transition: transform 0.2s;
-}
-.card:hover {
-    transform: translateY(-5px);
-}
-.fa-3x {
-    margin-bottom: 15px;
-}
-.btn-warning {
-    background-color: #ffc107;
-    border-color: #ffc107;
-    color: #000;
-}
-.btn-warning:hover {
-    background-color: #ffca2c;
-    border-color: #ffc720;
-    color: #000;
-}
-</style>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Add any dashboard-specific JavaScript here
-});
-</script>
 {% endblock %}

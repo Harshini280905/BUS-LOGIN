@@ -1,84 +1,43 @@
 {% extends "base.html" %}
 
+{% block title %}Reports & Analytics - Navis{% endblock %}
+
 {% block content %}
-<div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Reports & Analytics</h2>
-        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
-    </div>
-
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }}">{{ message }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
+<div class="container-fluid">
     <div class="row">
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Performance Reports</h5>
-                    <p class="card-text">View detailed performance metrics for drivers including on-time arrivals, break compliance, and passenger feedback.</p>
-                    <a href="{{ url_for('performance_reports') }}" class="btn btn-primary">View Performance Reports</a>
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Reports & Analytics</h4>
                 </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
                 <div class="card-body">
-                    <h5 class="card-title">Incident Reports</h5>
-                    <p class="card-text">Track and analyze incidents, delays, and other operational issues to improve service quality.</p>
-                    <a href="{{ url_for('incident_reports') }}" class="btn btn-primary">View Incident Reports</a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Compliance Reports</h5>
-                    <p class="card-text">Monitor driver compliance with regulations, including break periods and license status.</p>
-                    <a href="{{ url_for('compliance_reports') }}" class="btn btn-primary">View Compliance Reports</a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">Export Reports</h5>
-                    <p class="card-text">Export reports in various formats for further analysis or record-keeping.</p>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                            Export Reports
-                        </button>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#" onclick="exportReport('performance')">Performance Report</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="exportReport('incidents')">Incident Report</a></li>
-                            <li><a class="dropdown-item" href="#" onclick="exportReport('compliance')">Compliance Report</a></li>
-                        </ul>
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">Performance Reports</h5>
+                                    <p class="card-text">View detailed performance metrics and analytics for drivers.</p>
+                                    <a href="{{ url_for('performance_reports') }}" class="btn btn-primary">
+                                        <i class="fas fa-chart-line mr-2"></i>View Performance Reports
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title">Incident Reports</h5>
+                                    <p class="card-text">Track and analyze incident reports and their resolutions.</p>
+                                    <a href="{{ url_for('incident_reports') }}" class="btn btn-primary">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>View Incident Reports
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-{% block scripts %}
-<script>
-    function exportReport(type) {
-        const startDate = prompt('Enter start date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-        if (!startDate) return;
-
-        const endDate = prompt('Enter end date (YYYY-MM-DD):', new Date().toISOString().split('T')[0]);
-        if (!endDate) return;
-
-        window.location.href = `/reports/export/${type}?start_date=${startDate}&end_date=${endDate}`;
-    }
-</script>
-{% endblock %}
-
 {% endblock %} 

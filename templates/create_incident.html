@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Report New Incident</h2>
+        <a href="{{ url_for('incident_reports') }}" class="btn btn-secondary">Back to Reports</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" class="row g-3">
+                <div class="col-md-6">
+                    <label for="driver_username" class="form-label">Driver</label>
+                    <select class="form-select" id="driver_username" name="driver_username" required>
+                        <option value="">Select Driver</option>
+                        {% for driver in drivers %}
+                            <option value="{{ driver.username }}">{{ driver.full_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="date" class="form-label">Date</label>
+                    <input type="date" class="form-control" id="date" name="date" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="incident_type" class="form-label">Incident Type</label>
+                    <select class="form-select" id="incident_type" name="incident_type" required>
+                        <option value="">Select Type</option>
+                        <option value="accident">Accident</option>
+                        <option value="delay">Delay</option>
+                        <option value="passenger_complaint">Passenger Complaint</option>
+                        <option value="mechanical">Mechanical Issue</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="severity" class="form-label">Severity</label>
+                    <select class="form-select" id="severity" name="severity" required>
+                        <option value="">Select Severity</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="4" required></textarea>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Submit Report</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Set max date to today
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('date').max = today;
+    });
+</script>
+{% endblock %}
+
+{% endblock %} 

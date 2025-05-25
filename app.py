@@ -10,6 +10,11 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 import base64
 from io import BytesIO
 from PIL import Image
+import xlsxwriter
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 
 
@@ -160,12 +165,31 @@ class PerformanceMetric(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     driver_username = db.Column(db.String(150), db.ForeignKey('user.username'), nullable=False)
     date = db.Column(db.Date, nullable=False)
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
     on_time_arrival_percentage = db.Column(db.Float)
     break_compliance_percentage = db.Column(db.Float)
     total_hours_worked = db.Column(db.Float)
     incidents_reported = db.Column(db.Integer, default=0)
     passenger_feedback_rating = db.Column(db.Float)
+    notes = db.Column(db.Text, nullable=True, default='')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Incident(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    driver_username = db.Column(db.String(80), db.ForeignKey('user.username'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+    incident_type = db.Column(db.String(50), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='open')
+    reported_by = db.Column(db.String(80), db.ForeignKey('user.username'), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    driver = db.relationship('User', foreign_keys=[driver_username], backref='incidents')
+    reporter = db.relationship('User', foreign_keys=[reported_by], backref='reported_incidents')
 
 class BusAssignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -176,6 +200,18 @@ class BusAssignment(db.Model):
     end_time = db.Column(db.String(50), nullable=False)
     bus_number = db.Column(db.String(20), nullable=False)
     status = db.Column(db.String(20), default='scheduled')  # scheduled, in_progress, completed, cancelled
+
+class BusManagement(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    route = db.Column(db.String(100), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    time_slot = db.Column(db.String(50), nullable=False)
+    bus_number = db.Column(db.String(20), nullable=False)
+    passenger_count = db.Column(db.Integer, nullable=False)
+    bus_capacity = db.Column(db.Integer, nullable=False)
+    notes = db.Column(db.Text)
+    reported_by = db.Column(db.String(150), db.ForeignKey('user.username'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Create DB Tables
 with app.app_context():
@@ -467,9 +503,15 @@ def forgot_password():
         username = request.form['username']
         user = User.query.filter_by(username=username).first()
         if user:
-            # In a real application, you would send an email with a reset link
-            # For this demo, we'll just show the password
-            flash(f'Your password is: {user.username}123', 'info')
+            # For drivers, reset to default password
+            if user.role == 'driver':
+                user.password = generate_password_hash('driver123')
+                db.session.commit()
+                flash('Your password has been reset to: driver123', 'success')
+            else:
+                # For admin, show the default password
+                flash('Your password is: admin123', 'info')
+            return redirect(url_for('login'))
         else:
             flash('Username not found!', 'danger')
         return redirect(url_for('login'))
@@ -846,7 +888,7 @@ def admin_dashboard():
         Notification.recipient_username == 'admin',
         Notification.notification_type.in_(['shift_swap', 'leave_request'])
     ).order_by(Notification.created_at.desc()).limit(3).all()
-    
+
     return render_template('admin_dashboard.html',
                          total_drivers=total_drivers,
                          pending_leaves=pending_leaves,
@@ -1469,158 +1511,220 @@ def delete_notification(notification_id):
 
 # Reporting and Analytics Routes
 @app.route('/reports')
+@login_required
 def reports_dashboard():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
     
     return render_template('reports_dashboard.html')
 
-@app.route('/reports/performance', methods=['GET', 'POST'])
-def performance_reports():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date()
-        end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d').date()
-        driver_username = request.form.get('driver_username')
-        
-        # Get performance metrics
-        query = PerformanceMetric.query.filter(
-            PerformanceMetric.date.between(start_date, end_date)
-        )
-        if driver_username:
-            query = query.filter_by(driver_username=driver_username)
-        
-        metrics = query.all()
-        
-        # Calculate averages
-        total_metrics = len(metrics)
-        if total_metrics > 0:
-            avg_on_time = sum(m.on_time_arrival_percentage or 0 for m in metrics) / total_metrics
-            avg_break_compliance = sum(m.break_compliance_percentage or 0 for m in metrics) / total_metrics
-            avg_hours = sum(m.total_hours_worked or 0 for m in metrics) / total_metrics
-            total_incidents = sum(m.incidents_reported or 0 for m in metrics)
-            avg_rating = sum(m.passenger_feedback_rating or 0 for m in metrics) / total_metrics
-        else:
-            avg_on_time = avg_break_compliance = avg_hours = total_incidents = avg_rating = 0
-        
-        summary = {
-            'avg_on_time': round(avg_on_time, 2),
-            'avg_break_compliance': round(avg_break_compliance, 2),
-            'avg_hours': round(avg_hours, 2),
-            'total_incidents': total_incidents,
-            'avg_rating': round(avg_rating, 2)
-        }
-        
-        return render_template('performance_report.html',
-                             metrics=metrics,
-                             summary=summary,
-                             start_date=start_date,
-                             end_date=end_date)
-    
-    drivers = User.query.filter_by(role='driver').all()
-    return render_template('performance_report.html', drivers=drivers)
-
-@app.route('/reports/incidents', methods=['GET', 'POST'])
-def incident_reports():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date()
-        end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d').date()
-        incident_type = request.form.get('incident_type')
-        
-        # Get incidents from performance metrics
-        query = PerformanceMetric.query.filter(
-            PerformanceMetric.date.between(start_date, end_date),
-            PerformanceMetric.incidents_reported > 0
-        )
-        
-        incidents = query.all()
-        
-        return render_template('incident_report.html',
-                             incidents=incidents,
-                             start_date=start_date,
-                             end_date=end_date)
-    
-    return render_template('incident_report.html')
-
 @app.route('/reports/compliance', methods=['GET', 'POST'])
+@login_required
 def compliance_reports():
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    # Get all drivers for filter
+    drivers = User.query.filter_by(role='driver').all()
     
     if request.method == 'POST':
-        start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date()
-        end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d').date()
-        
-        # Get break compliance from performance metrics
-        metrics = PerformanceMetric.query.filter(
-            PerformanceMetric.date.between(start_date, end_date)
-        ).all()
-        
-        # Get driver license status
-        drivers = User.query.filter_by(role='driver').all()
-        license_status = []
-        for driver in drivers:
-            if driver.license_expiry:
-                days_to_expiry = (driver.license_expiry - datetime.utcnow().date()).days
-                status = 'Valid' if days_to_expiry > 0 else 'Expired'
-            else:
-                status = 'Not Provided'
-                days_to_expiry = None
+        try:
+            start_date = datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date()
+            end_date = datetime.strptime(request.form.get('end_date'), '%Y-%m-%d').date()
+            driver_username = request.form.get('driver_username')
             
-            license_status.append({
-                'username': driver.username,
-                'full_name': driver.full_name,
-                'license_number': driver.license_number,
-                'status': status,
-                'days_to_expiry': days_to_expiry
-            })
-        
-        return render_template('compliance_report.html',
-                             metrics=metrics,
-                             license_status=license_status,
-                             start_date=start_date,
-                             end_date=end_date)
+            # Get attendance records
+            attendance_query = Attendance.query.filter(
+                Attendance.date.between(start_date, end_date)
+            )
+            if driver_username:
+                attendance_query = attendance_query.filter_by(driver_username=driver_username)
+            attendance_records = attendance_query.all()
+            
+            # Get break records
+            break_query = BreakPeriod.query.filter(
+                BreakPeriod.start_time.between(
+                    datetime.combine(start_date, time.min),
+                    datetime.combine(end_date, time.max)
+                )
+            )
+            if driver_username:
+                break_query = break_query.filter_by(driver_username=driver_username)
+            break_records = break_query.all()
+            
+            # Calculate compliance metrics
+            total_days = (end_date - start_date).days + 1
+            total_drivers = len(drivers) if not driver_username else 1
+            
+            attendance_compliance = {
+                'total_days': total_days * total_drivers,
+                'present_days': len(attendance_records),
+                'late_days': sum(1 for r in attendance_records if r.status == 'late'),
+                'absent_days': sum(1 for r in attendance_records if r.status == 'absent')
+            }
+            
+            break_compliance = {
+                'total_breaks': len(break_records),
+                'completed_breaks': sum(1 for r in break_records if r.status == 'completed'),
+                'missed_breaks': sum(1 for r in break_records if r.status == 'scheduled')
+            }
+            
+            # Create CSV content if export requested
+            if request.form.get('export') == 'true':
+                csv_content = 'Date,Driver,Attendance Status,Break Status,Total Hours\n'
+                for record in attendance_records:
+                    break_record = next((b for b in break_records if b.driver_username == record.driver_username 
+                                      and b.start_time.date() == record.date), None)
+                    csv_content += f'{record.date},{record.driver_username},{record.status},'
+                    csv_content += f'{break_record.status if break_record else "No break"},{record.total_hours}\n'
+                
+                output = make_response(csv_content)
+                output.headers['Content-Disposition'] = f'attachment; filename=compliance_report_{start_date}_{end_date}.csv'
+                output.headers['Content-type'] = 'text/csv'
+                return output
+            
+            return render_template('compliance_report.html',
+                                attendance_compliance=attendance_compliance,
+                                break_compliance=break_compliance,
+                                attendance_records=attendance_records,
+                                break_records=break_records,
+                                drivers=drivers,
+                                start_date=start_date,
+                                end_date=end_date,
+                                selected_driver=driver_username)
+            
+        except ValueError as e:
+            flash('Invalid date format. Please use YYYY-MM-DD format.', 'danger')
+            return render_template('compliance_report.html', drivers=drivers)
+        except Exception as e:
+            flash(f'Error generating report: {str(e)}', 'danger')
+            return render_template('compliance_report.html', drivers=drivers)
     
-    return render_template('compliance_report.html')
+    return render_template('compliance_report.html', drivers=drivers)
 
-@app.route('/reports/export/<report_type>')
-def export_report(report_type):
-    if 'user_id' not in session or session['role'] != 'admin':
-        return redirect(url_for('login'))
+@app.route('/reports/performance', methods=['GET', 'POST'])
+@login_required
+def performance_reports():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
     
-    # Get date range from query parameters
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
+    # Get all drivers for the form
+    drivers = User.query.filter_by(role='driver').all()
     
-    if start_date and end_date:
-        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    if request.method == 'POST':
+        try:
+            # Get the selected driver from the form
+            driver_username = request.form.get('driver_username')
+            if not driver_username:
+                flash('Please select a driver!', 'danger')
+                return redirect(url_for('performance_reports'))
+            
+            # Get start and end dates from the form
+            start_date = request.form.get('start_date')
+            end_date = request.form.get('end_date')
+            
+            # Create new performance record
+            performance = PerformanceMetric(
+                driver_username=driver_username,
+                date=datetime.now().date(),
+                start_date=datetime.strptime(start_date, '%Y-%m-%d').date() if start_date else None,
+                end_date=datetime.strptime(end_date, '%Y-%m-%d').date() if end_date else None,
+                on_time_arrival_percentage=float(request.form['on_time_percentage']),
+                break_compliance_percentage=float(request.form['break_compliance']),
+                total_hours_worked=float(request.form['hours_worked']),
+                incidents_reported=int(request.form['incidents']),
+                passenger_feedback_rating=float(request.form['feedback_rating']),
+                notes=request.form.get('notes', '')
+            )
+            db.session.add(performance)
+            db.session.commit()
+            
+            flash('Performance report added successfully!', 'success')
+            return redirect(url_for('performance_reports'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding performance report: {str(e)}', 'danger')
+            return redirect(url_for('performance_reports'))
+    
+    try:
+        # Get all performance records
+        records = PerformanceMetric.query.order_by(PerformanceMetric.date.desc()).all()
+        return render_template('performance_report.html', 
+                             drivers=drivers,
+                             records=records)
+    except Exception as e:
+        flash(f'Error retrieving performance records: {str(e)}', 'danger')
+        return redirect(url_for('driver_dashboard'))
+
+@app.route('/reports/performance/export', methods=['POST'])
+@login_required
+def export_performance_report():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    try:
+        # Get all performance records
+        records = PerformanceMetric.query.order_by(PerformanceMetric.date.desc()).all()
         
-        if report_type == 'performance':
-            metrics = PerformanceMetric.query.filter(
-                PerformanceMetric.date.between(start_date, end_date)
-            ).all()
-            
-            # Create CSV content
-            csv_content = 'Date,Driver,On-Time %,Break Compliance %,Hours Worked,Incidents,Rating\n'
-            for metric in metrics:
-                csv_content += f'{metric.date},{metric.driver_username},{metric.on_time_arrival_percentage},'
-                csv_content += f'{metric.break_compliance_percentage},{metric.total_hours_worked},'
-                csv_content += f'{metric.incidents_reported},{metric.passenger_feedback_rating}\n'
-            
-            # Create response
-            output = make_response(csv_content)
-            output.headers['Content-Disposition'] = f'attachment; filename=performance_report_{start_date}_{end_date}.csv'
-            output.headers['Content-type'] = 'text/csv'
-            return output
+        # Create Excel file
+        output = BytesIO()
+        workbook = xlsxwriter.Workbook(output)
+        worksheet = workbook.add_worksheet()
+        
+        # Add headers
+        headers = ['Date', 'Start Date', 'End Date', 'Driver', 'On-Time %', 'Break Compliance %', 'Hours Worked', 'Incidents', 'Rating', 'Notes']
+        for col, header in enumerate(headers):
+            worksheet.write(0, col, header)
+        
+        # Add data
+        for row, record in enumerate(records, start=1):
+            worksheet.write(row, 0, record.date.strftime('%Y-%m-%d'))
+            worksheet.write(row, 1, record.start_date.strftime('%Y-%m-%d') if record.start_date else '-')
+            worksheet.write(row, 2, record.end_date.strftime('%Y-%m-%d') if record.end_date else '-')
+            worksheet.write(row, 3, record.driver_username)
+            worksheet.write(row, 4, f"{record.on_time_arrival_percentage}%")
+            worksheet.write(row, 5, f"{record.break_compliance_percentage}%")
+            worksheet.write(row, 6, record.total_hours_worked)
+            worksheet.write(row, 7, record.incidents_reported)
+            worksheet.write(row, 8, record.passenger_feedback_rating)
+            worksheet.write(row, 9, record.notes)
+        
+        workbook.close()
+        output.seek(0)
+        
+        # Create response
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename=performance_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Error exporting report: {str(e)}', 'danger')
+        return redirect(url_for('performance_reports'))
+
+@app.route('/reports/performance/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_performance_report(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
     
-    flash('Invalid date range for report export', 'danger')
-    return redirect(url_for('reports_dashboard'))
+    try:
+        record = PerformanceMetric.query.get_or_404(id)
+        db.session.delete(record)
+        db.session.commit()
+        flash('Performance report deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting performance report: {str(e)}', 'danger')
+    
+    return redirect(url_for('performance_reports'))
 
 # Get Pending Notifications Count
 def get_pending_notifications(username):
@@ -2273,6 +2377,286 @@ def update_driver_names():
         flash(f'Error updating driver names: {str(e)}', 'danger')
     
     return redirect(url_for('view_drivers'))
+
+@app.route('/incidents/create', methods=['GET', 'POST'])
+@login_required
+def create_incident():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    if request.method == 'POST':
+        try:
+            incident = Incident(
+                driver_username=request.form['driver_username'],
+                date=datetime.strptime(request.form['date'], '%Y-%m-%d').date(),
+                incident_type=request.form['incident_type'],
+                description=request.form['description'],
+                severity=request.form['severity'],
+                reported_by=current_user.username
+            )
+            db.session.add(incident)
+            
+            # Create notification for the driver
+            notification = Notification(
+                recipient_username=incident.driver_username,
+                title='New Incident Reported',
+                message=f'An incident has been reported for {incident.date}. Type: {incident.incident_type}, Severity: {incident.severity}',
+                notification_type='incident',
+                priority='high' if incident.severity == 'high' else 'normal'
+            )
+            db.session.add(notification)
+            
+            db.session.commit()
+            flash('Incident reported successfully!', 'success')
+            return redirect(url_for('incident_reports'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error reporting incident: {str(e)}', 'danger')
+    
+    drivers = User.query.filter_by(role='driver').all()
+    return render_template('create_incident.html', drivers=drivers)
+
+@app.route('/incidents/<int:id>/update', methods=['POST'])
+@login_required
+def update_incident(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    incident = Incident.query.get_or_404(id)
+    
+    try:
+        incident.status = request.form['status']
+        incident.resolution_notes = request.form.get('resolution_notes')
+        
+        if incident.status == 'resolved':
+            incident.resolved_at = datetime.utcnow()
+        
+        # Create notification for the driver
+        notification = Notification(
+            recipient_username=incident.driver_username,
+            title='Incident Status Updated',
+            message=f'Your incident from {incident.date} has been updated to {incident.status}.',
+            notification_type='incident',
+            priority='normal'
+        )
+        db.session.add(notification)
+        
+        db.session.commit()
+        flash('Incident updated successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating incident: {str(e)}', 'danger')
+    
+    return redirect(url_for('incident_reports'))
+
+@app.route('/reports/incidents', methods=['GET', 'POST'])
+@login_required
+def incident_reports():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    drivers = User.query.filter_by(role='driver').all()
+    
+    if request.method == 'POST':
+        try:
+            new_incident = Incident(
+                driver_username=request.form.get('driver_username'),
+                date=datetime.strptime(request.form.get('date'), '%Y-%m-%d').date(),
+                incident_type=request.form.get('incident_type'),
+                description=request.form.get('description'),
+                reported_by=current_user.username
+            )
+            db.session.add(new_incident)
+            db.session.commit()
+            flash('Incident report added successfully!', 'success')
+            return redirect(url_for('incident_reports'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding incident report: {str(e)}', 'danger')
+    
+    records = Incident.query.order_by(Incident.date.desc()).all()
+    return render_template('incident_report.html', drivers=drivers, records=records)
+
+@app.route('/reports/incidents/export', methods=['GET', 'POST'])
+@login_required
+def export_incident_report():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    try:
+        # Get filter parameters from either POST or GET request
+        driver_username = request.form.get('driver_username') or request.args.get('driver_username')
+        start_date = request.form.get('start_date') or request.args.get('start_date')
+        end_date = request.form.get('end_date') or request.args.get('end_date')
+        
+        # Build query
+        query = Incident.query
+        
+        if driver_username:
+            query = query.filter_by(driver_username=driver_username)
+        if start_date:
+            query = query.filter(Incident.date >= datetime.strptime(start_date, '%Y-%m-%d').date())
+        if end_date:
+            query = query.filter(Incident.date <= datetime.strptime(end_date, '%Y-%m-%d').date())
+        
+        incidents = query.order_by(Incident.date.desc()).all()
+        
+        # Create PDF
+        output = BytesIO()
+        doc = SimpleDocTemplate(output, pagesize=landscape(letter))
+        elements = []
+        
+        # Add title
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            spaceAfter=30
+        )
+        elements.append(Paragraph("Incident Report", title_style))
+        
+        # Add date range if specified
+        if start_date or end_date:
+            date_text = "Date Range: "
+            if start_date and end_date:
+                date_text += f"{start_date} to {end_date}"
+            elif start_date:
+                date_text += f"From {start_date}"
+            elif end_date:
+                date_text += f"Until {end_date}"
+            elements.append(Paragraph(date_text, styles['Normal']))
+            elements.append(Spacer(1, 20))
+        
+        # Create table data
+        data = [['Date', 'Driver', 'Type', 'Description']]
+        for incident in incidents:
+            data.append([
+                incident.date.strftime('%Y-%m-%d'),
+                incident.driver_username,
+                incident.incident_type.title(),
+                incident.description
+            ])
+        
+        # Create table
+        table = Table(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 14),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        
+        elements.append(table)
+        
+        # Build PDF
+        doc.build(elements)
+        output.seek(0)
+        
+        # Create response
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=incident_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Error exporting report: {str(e)}', 'danger')
+        return redirect(url_for('incident_reports'))
+
+@app.route('/reports/incidents/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_incident(id):
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    try:
+        incident = Incident.query.get_or_404(id)
+        db.session.delete(incident)
+        db.session.commit()
+        flash('Incident deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting incident: {str(e)}', 'danger')
+    
+    return redirect(url_for('incident_reports'))
+
+@app.route('/api/incidents/<int:incident_id>')
+@login_required
+def get_incident_details(incident_id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    incident = Incident.query.get_or_404(incident_id)
+    return jsonify({
+        'id': incident.id,
+        'date': incident.date.strftime('%Y-%m-%d'),
+        'driver_username': incident.driver_username,
+        'incident_type': incident.incident_type,
+        'description': incident.description,
+        'severity': incident.severity,
+        'status': incident.status,
+        'location': incident.location,
+        'reported_by': incident.reported_by,
+        'resolution': incident.resolution_notes
+    })
+
+@app.route('/reports/bus-management', methods=['GET', 'POST'])
+@login_required
+def bus_management_reports():
+    if current_user.role != 'admin':
+        flash('Access denied!', 'danger')
+        return redirect(url_for('driver_dashboard'))
+    
+    if request.method == 'POST':
+        try:
+            route = request.form.get('route')
+            date = datetime.strptime(request.form.get('date'), '%Y-%m-%d').date()
+            time_slot = request.form.get('time_slot')
+            bus_number = request.form.get('bus_number')
+            passenger_count = int(request.form.get('passenger_count'))
+            bus_capacity = int(request.form.get('bus_capacity'))
+            notes = request.form.get('notes')
+            
+            # Create new bus management record
+            bus_record = BusManagement(
+                route=route,
+                date=date,
+                time_slot=time_slot,
+                bus_number=bus_number,
+                passenger_count=passenger_count,
+                bus_capacity=bus_capacity,
+                notes=notes,
+                reported_by=current_user.username
+            )
+            db.session.add(bus_record)
+            db.session.commit()
+            
+            flash('Bus management report added successfully!', 'success')
+            return redirect(url_for('bus_management_reports'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding report: {str(e)}', 'danger')
+    
+    # Get all bus management records
+    records = BusManagement.query.order_by(BusManagement.date.desc()).all()
+    
+    return render_template('bus_management_reports.html', records=records)
 
 if __name__ == '__main__':
     app.run(debug=True)

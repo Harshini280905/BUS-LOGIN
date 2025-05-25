@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Compliance Report - Navis{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Compliance Report</h2>
+        <div>
+            <a href="{{ url_for('reports_dashboard') }}" class="btn btn-secondary me-2">Back to Reports</a>
+            <button onclick="exportToPDF()" class="btn btn-primary">
+                <i class="fas fa-file-pdf"></i> Export to PDF
+            </button>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Filter Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="POST" class="row g-3">
+                <div class="col-md-4">
+                    <label for="start_date" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" 
+                           value="{{ start_date.strftime('%Y-%m-%d') if start_date else '' }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" 
+                           value="{{ end_date.strftime('%Y-%m-%d') if end_date else '' }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="driver_username" class="form-label">Driver</label>
+                    <select class="form-select" id="driver_username" name="driver_username">
+                        <option value="">All Drivers</option>
+                        {% for driver in drivers %}
+                        <option value="{{ driver.username }}" {% if selected_driver == driver.username %}selected{% endif %}>
+                            {{ driver.full_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Generate Report</button>
+                    <button type="submit" name="export" value="true" class="btn btn-success">
+                        <i class="fas fa-file-excel"></i> Export to CSV
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if attendance_compliance and break_compliance %}
+    <!-- Summary Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Attendance Compliance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Total Days:</strong> {{ attendance_compliance.total_days }}</p>
+                            <p><strong>Present Days:</strong> {{ attendance_compliance.present_days }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Late Days:</strong> {{ attendance_compliance.late_days }}</p>
+                            <p><strong>Absent Days:</strong> {{ attendance_compliance.absent_days }}</p>
+                        </div>
+                    </div>
+                    <div class="progress mt-3">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ (attendance_compliance.present_days / attendance_compliance.total_days * 100)|round }}%">
+                            {{ (attendance_compliance.present_days / attendance_compliance.total_days * 100)|round }}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Break Compliance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Total Breaks:</strong> {{ break_compliance.total_breaks }}</p>
+                            <p><strong>Completed Breaks:</strong> {{ break_compliance.completed_breaks }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Missed Breaks:</strong> {{ break_compliance.missed_breaks }}</p>
+                        </div>
+                    </div>
+                    <div class="progress mt-3">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ (break_compliance.completed_breaks / break_compliance.total_breaks * 100)|round if break_compliance.total_breaks > 0 else 0 }}%">
+                            {{ (break_compliance.completed_breaks / break_compliance.total_breaks * 100)|round if break_compliance.total_breaks > 0 else 0 }}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Records -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Detailed Records</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="complianceTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Driver</th>
+                            <th>Attendance Status</th>
+                            <th>Break Status</th>
+                            <th>Total Hours</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in attendance_records %}
+                        <tr>
+                            <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ record.driver_username }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if record.status == 'present' else 'warning' if record.status == 'late' else 'danger' }}">
+                                    {{ record.status|title }}
+                                </span>
+                            </td>
+                            <td>
+                                {% set break_record = break_records|selectattr('driver_username', 'equalto', record.driver_username)|selectattr('start_time.date', 'equalto', record.date)|first %}
+                                {% if break_record %}
+                                    <span class="badge bg-{{ 'success' if break_record.status == 'completed' else 'warning' }}">
+                                        {{ break_record.status|title }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No Break</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ record.total_hours|round(2) if record.total_hours else 'N/A' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        No compliance data found for the selected criteria.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+function exportToPDF() {
+    const element = document.getElementById('complianceTable');
+    const opt = {
+        margin: 1,
+        filename: 'compliance_report.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
+    };
+    
+    html2pdf().set(opt).from(element).save();
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Bus Management Reports - Navis{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">Bus Management Reports</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Add Report Form -->
+                    <form method="POST" class="mb-4">
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="route" class="form-label">Route</label>
+                                <input type="text" class="form-control" id="route" name="route" required placeholder="Enter route">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="date" class="form-label">Date</label>
+                                <input type="date" class="form-control" id="date" name="date" required>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="time_slot" class="form-label">Time Slot</label>
+                                <select class="form-select" id="time_slot" name="time_slot" required>
+                                    <option value="">Select Time Slot</option>
+                                    <option value="morning">Morning (6:00 - 12:00)</option>
+                                    <option value="afternoon">Afternoon (12:00 - 18:00)</option>
+                                    <option value="evening">Evening (18:00 - 24:00)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="bus_number" class="form-label">Bus Number</label>
+                                <input type="text" class="form-control" id="bus_number" name="bus_number" required placeholder="Enter bus number">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="passenger_count" class="form-label">Passenger Count</label>
+                                <input type="number" class="form-control" id="passenger_count" name="passenger_count" required min="0">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="bus_capacity" class="form-label">Bus Capacity</label>
+                                <input type="number" class="form-control" id="bus_capacity" name="bus_capacity" required min="0">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="notes" class="form-label">Notes</label>
+                                <textarea class="form-control" id="notes" name="notes" rows="1" placeholder="Add any additional notes about the bus capacity or passenger load"></textarea>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus mr-2"></i>Add Report
+                        </button>
+                    </form>
+
+                    <!-- Reports Table -->
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Route</th>
+                                    <th>Time Slot</th>
+                                    <th>Bus Number</th>
+                                    <th>Passengers</th>
+                                    <th>Capacity</th>
+                                    <th>Utilization</th>
+                                    <th>Notes</th>
+                                    <th>Reported By</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in records %}
+                                <tr>
+                                    <td>{{ record.date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ record.route }}</td>
+                                    <td>{{ record.time_slot }}</td>
+                                    <td>{{ record.bus_number }}</td>
+                                    <td>{{ record.passenger_count }}</td>
+                                    <td>{{ record.bus_capacity }}</td>
+                                    <td>
+                                        {% set utilization = (record.passenger_count / record.bus_capacity * 100) | round %}
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar {% if utilization > 90 %}bg-danger{% elif utilization > 70 %}bg-warning{% else %}bg-success{% endif %}" 
+                                                 role="progressbar" 
+                                                 style="width: {{ utilization }}%;" 
+                                                 aria-valuenow="{{ utilization }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                                {{ utilization }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ record.notes }}</td>
+                                    <td>{{ record.reported_by }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set today's date as the default value for the date input
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('date').value = today;
+});
+</script>
+{% endblock %} 
