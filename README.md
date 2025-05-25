@@ -1,4 +1,4 @@
-# BUS-LOGIN 🚌
+# NAVIS - BUS SCHEDULING APP 🚌
 
 A secure and efficient bus scheduling and login management system developed using Flask, SQLite, HTML, CSS, and JavaScript.
 
